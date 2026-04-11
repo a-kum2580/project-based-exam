@@ -1,4 +1,4 @@
-# *Software Construction Exam Project*
+# Software Construction Exam Project
 
 A full-stack movie discovery platform built with **Django REST Framework** (backend) and **Next.js** (frontend), powered by The Movie Database (TMDB) API.
 
