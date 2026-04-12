@@ -45,7 +45,7 @@ class TMDBService:
 
     def search_movies(self, query: str, page: int = 1) -> dict:
         """searching movies by title."""
-        return self._get("search/movie", {"query": query, "page": page})
+        return self._get("search/movie", {"query": query, "page": page}, ttl=CACHE_TTL_SHORT)
 
     def get_movie_details(self, tmdb_id: int) -> dict:
         """getting  full movie details with credits, videos, and recommendations."""
@@ -56,7 +56,7 @@ class TMDBService:
 
     def get_trending_movies(self, time_window: str = "week", page: int = 1) -> dict:
         """getting  trending movies (day or week)."""
-        return self._get(f"trending/movie/{time_window}", {"page": page})
+        return self._get(f"trending/movie/{time_window}", {"page": page}, ttl=CACHE_TTL_SHORT)
 
     def get_popular_movies(self, page: int = 1) -> dict:
         """getting  popular movies."""
