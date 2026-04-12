@@ -9,7 +9,7 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get('SECRET_KEY', 'fallback-secret-key')
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-fallback-dev-only-change-in-production')
 
 DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
 
@@ -33,6 +33,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
