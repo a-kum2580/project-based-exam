@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 tmdb = TMDBService()
 sync_service = MovieSyncService()
 
+def safe_int(value, default=1):
 ## Movie ViewSet
 class MovieViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Movie.objects.prefetch_related("genres", "directors").all()
@@ -71,7 +72,7 @@ class GenreViewSet(viewsets.ReadOnlyModelViewSet):
     def movies(self, request, slug=None):
         """GET /api/movies/genres/{slug}/movies/ → movies in this genre."""
         genre = self.get_object()
-        page = int(request.query_params.get("page", 1))
+        page = safe_int(request.query_params.get("page", 1))
         sort = request.query_params.get("sort", "popularity.desc")
 
         # Try local DB first
