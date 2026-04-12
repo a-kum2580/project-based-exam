@@ -24,7 +24,7 @@ class TMDBService:
 
     ### class helper functions
 
-    def _get(self, endpoint: str, params: Optional[dict] = None) -> dict:
+    def _get(self, endpoint: str, params: Optional[dict] = None, ttl: int = CACHE_TTL_MEDIUM) -> dict:
         """Make Get request to TMDB with caching."""
         cache_key = f"tmdb:{endpoint}:{params}"
         cached = cache.get(cache_key)
@@ -36,7 +36,7 @@ class TMDBService:
             response = self.session.get(url, params=params or {}, timeout=10)
             response.raise_for_status()
             data = response.json()
-            cache.set(cache_key, data, CACHE_TTL_MEDIUM)
+            cache.set(cache_key, data, ttl)
             return data
         except requests.RequestException as e:
             logger.error(f"TMDB API error for {endpoint}: {e}")
@@ -45,7 +45,7 @@ class TMDBService:
 
     def search_movies(self, query: str, page: int = 1) -> dict:
         """searching movies by title."""
-        return self._get("search/movie", {"query": query, "page": page})
+        return self._get("search/movie", {"query": query, "page": page}, ttl=CACHE_TTL_SHORT)
 
     def get_movie_details(self, tmdb_id: int) -> dict:
         """getting  full movie details with credits, videos, and recommendations."""
@@ -56,7 +56,7 @@ class TMDBService:
 
     def get_trending_movies(self, time_window: str = "week", page: int = 1) -> dict:
         """getting  trending movies (day or week)."""
-        return self._get(f"trending/movie/{time_window}", {"page": page})
+        return self._get(f"trending/movie/{time_window}", {"page": page}, ttl=CACHE_TTL_SHORT)
 
     def get_popular_movies(self, page: int = 1) -> dict:
         """getting  popular movies."""
@@ -264,9 +264,7 @@ class WikipediaService:
     @staticmethod
     def get_movie_summary(title: str, year: Optional[int] = None) -> dict:
         """getting  Wikipedia summary for a movie."""
-        search_title = f"{title} (film)" if year else f"{title} (film)"
-        if year:
-            search_title = f"{title} ({year} film)"
+        search_title = f"{title} ({year} film)" if year else f"{title} (film)"
 
         cache_key = f"wiki:{search_title}"
         cached = cache.get(cache_key)
