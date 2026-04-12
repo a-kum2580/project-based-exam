@@ -24,35 +24,20 @@ class RecommendationEngine:
 
     def compute_genre_preferences(self, user) -> list:
         from recommendations.models import UserMovieInteraction, UserGenrePreference
+        from movies.models import Genre
 
         interactions = UserMovieInteraction.objects.filter(user=user)
         genre_scores = Counter()
-        genre_names = {}
+
+        # Pre-fetch all genre names in one query to avoid N+1
+        genre_names = {g.tmdb_id: g.name for g in Genre.objects.all()}
 
         for interaction in interactions:
-            if interaction.interaction_type == "like":
-                w = 5.0
-            elif interaction.interaction_type == "watched":
-                w = 3.0
-            elif interaction.interaction_type == "watchlist":
-                w = 2.5
-            elif interaction.interaction_type == "view":
-                w = 1.0
-            elif interaction.interaction_type == "search":
-                w = 0.5
-            elif interaction.interaction_type == "dislike":
-                w = -3.0
-            else:
-                w = 1.0
+            w = INTERACTION_WEIGHTS.get(interaction.interaction_type, 1.0)
             for genre_id in interaction.genre_ids:
                 genre_scores[genre_id] += w
                 if genre_id not in genre_names:
-                    from movies.models import Genre
-                    try:
-                        genre = Genre.objects.get(tmdb_id=genre_id)
-                        genre_names[genre_id] = genre.name
-                    except Genre.DoesNotExist:
-                        genre_names[genre_id] = f"Genre {genre_id}"
+                    genre_names[genre_id] = f"Genre {genre_id}"
 
         ### normalizing scores to 0-100 range
         if genre_scores:
@@ -103,7 +88,7 @@ class RecommendationEngine:
             data = self.tmdb.discover_movies(
                 with_genres=genre_id,
                 sort_by="vote_average.desc",
-                vote_count_gte=100,  
+                **{"vote_count.gte": 100},
                 page=page,
             )
             movies = data.get("results", [])
@@ -121,6 +106,10 @@ class RecommendationEngine:
 
         ### sorting by recommendation score
         unique_movies.sort(key=lambda x: x.get("_recommendation_score", 0), reverse=True)
+
+        # Strip internal score before returning
+        for m in unique_movies:
+            m.pop("_recommendation_score", None)
 
         return unique_movies[:limit]
 
