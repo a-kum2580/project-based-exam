@@ -118,7 +118,7 @@ class TMDBMovieSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     title = serializers.CharField()
     overview = serializers.CharField(allow_blank=True)
-    release_date = serializers.CharField(allow_blank=True)
+    release_date = serializers.CharField(allow_blank=True, allow_null=True, required=False)
     vote_average = serializers.FloatField()
     vote_count = serializers.IntegerField()
     popularity = serializers.FloatField()
