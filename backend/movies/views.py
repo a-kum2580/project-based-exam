@@ -127,7 +127,7 @@ class PersonViewSet(viewsets.ReadOnlyModelViewSet):
 @permission_classes([AllowAny])
 def search_movies(request):
     query = request.query_params.get("q", "").strip()
-    page = int(request.query_params.get("page", 1))
+    page = safe_int(request.query_params.get("page", 1))
 
     if not query:
         return Response(
@@ -152,7 +152,7 @@ def search_movies(request):
 @permission_classes([AllowAny])
 def trending_movies(request):
     window = request.query_params.get("window", "week")
-    page = int(request.query_params.get("page", 1))
+    page = safe_int(request.query_params.get("page", 1))
 
     data = tmdb.get_trending_movies(time_window=window, page=page)
     results = data.get("results", [])
@@ -315,7 +315,7 @@ def mood_movies(request, mood_slug):
     if not mood:
         return Response({"error": "Unknown mood"}, status=404)
 
-    page = int(request.query_params.get("page", 1))
+    page = safe_int(request.query_params.get("page", 1))
     params = {
         "with_genres": mood["genres"],
         "sort_by": mood.get("sort_by", "popularity.desc"),
@@ -343,7 +343,7 @@ def mood_movies(request, mood_slug):
 @permission_classes([AllowAny])
 def discover_filtered(request):
     params = {}
-    page = int(request.query_params.get("page", 1))
+    page = safe_int(request.query_params.get("page", 1))
     params["page"] = page
 
     genre = request.query_params.get("genre")
