@@ -39,12 +39,19 @@ npm run dev
 ```
 
 ### Environment Variables
-Create a `.env` file in the `backend/` directory:
-```
-TMDB_API_KEY=your_tmdb_api_key_here
-DJANGO_SECRET_KEY=your_secret_key_here
-DEBUG=True
-```
+Create a `.env` file in the `backend/` directory using `.env.example` as a template:
+
+```bash
+cp .env.example .env
+Then fill in your actual values:
+
+- `TMDB_API_KEY` - Get your free API key from https://www.themoviedb.org/settings/api
+- `SECRET_KEY` - Any random secret string
+- `DEBUG` - Set to `True` for development, `False` for production
+- `ALLOWED_HOSTS` - Comma separated list of allowed hosts
+- `CORS_ORIGINS` - Comma separated list of allowed frontend origins
+
+> **Note:** Never commit your `.env` file to GitHub. It is already listed in `.gitignore`.
 
 ## TMDB API
 Get your free API key at: https://www.themoviedb.org/settings/api
