@@ -24,7 +24,7 @@ class TMDBService:
 
     ### class helper functions
 
-    def _get(self, endpoint: str, params: Optional[dict] = None) -> dict:
+    def _get(self, endpoint: str, params: Optional[dict] = None, ttl: int = CACHE_TTL_MEDIUM) -> dict:
         """Make Get request to TMDB with caching."""
         cache_key = f"tmdb:{endpoint}:{params}"
         cached = cache.get(cache_key)
@@ -36,7 +36,7 @@ class TMDBService:
             response = self.session.get(url, params=params or {}, timeout=10)
             response.raise_for_status()
             data = response.json()
-            cache.set(cache_key, data, CACHE_TTL_MEDIUM)
+            cache.set(cache_key, data, ttl)
             return data
         except requests.RequestException as e:
             logger.error(f"TMDB API error for {endpoint}: {e}")
