@@ -20,7 +20,10 @@ engine = RecommendationEngine()
 @permission_classes([IsAuthenticated])
 def personalized_recommendations(request):
     """GET /api/recommendations/for-you/ → personalized picks."""
-    page = int(request.query_params.get("page", 1))
+    try:
+        page = int(request.query_params.get("page", 1))
+    except (TypeError, ValueError):
+        page = 1
     movies = engine.get_recommendations(request.user, page=page)
     serializer = TMDBMovieSerializer(movies, many=True)
     return Response({"results": serializer.data})
@@ -71,7 +74,12 @@ class WatchlistViewSet(viewsets.ModelViewSet):
         return Watchlist.objects.filter(user=self.request.user)
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        from django.db import IntegrityError
+        try:
+            serializer.save(user=self.request.user)
+        except IntegrityError:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({"detail": "This movie is already in your watchlist."})
 
     @action(detail=True, methods=["post"])
     def mark_watched(self, request, pk=None):
@@ -117,15 +125,16 @@ def dashboard_stats(request):
         for gid in interaction.genre_ids:
             genre_counter[gid] += 1
 
-    ## mapping genre IDs to names
+    ## mapping genre IDs to names (pre-fetch all to avoid N+1)
     from movies.models import Genre
+    genre_name_map = {g.tmdb_id: g.name for g in Genre.objects.all()}
     genre_distribution = []
     for gid, count in genre_counter.most_common(10):
-        try:
-            genre = Genre.objects.get(tmdb_id=gid)
-            genre_distribution.append({"name": genre.name, "tmdb_id": gid, "count": count})
-        except Genre.DoesNotExist:
-            genre_distribution.append({"name": f"Genre {gid}", "tmdb_id": gid, "count": count})
+        genre_distribution.append({
+            "name": genre_name_map.get(gid, f"Genre {gid}"),
+            "tmdb_id": gid,
+            "count": count,
+        })
 
     engine.compute_genre_preferences(user)
     prefs = UserGenrePreference.objects.filter(user=user).order_by("-weight")[:10]

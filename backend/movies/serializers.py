@@ -118,13 +118,13 @@ class TMDBMovieSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     title = serializers.CharField()
     overview = serializers.CharField(allow_blank=True)
-    release_date = serializers.CharField(allow_blank=True)
+    release_date = serializers.CharField(allow_blank=True, allow_null=True, required=False)
     vote_average = serializers.FloatField()
     vote_count = serializers.IntegerField()
     popularity = serializers.FloatField()
     poster_path = serializers.CharField(allow_blank=True, allow_null=True)
     backdrop_path = serializers.CharField(allow_blank=True, allow_null=True)
-    genre_ids = serializers.ListField(child=serializers.IntegerField())
+    genre_ids = serializers.ListField(child=serializers.IntegerField(), required=False, default=[])
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
