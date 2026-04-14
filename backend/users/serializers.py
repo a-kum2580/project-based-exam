@@ -47,7 +47,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         return data
 
     def validate_username(self, value):
-        return value.strip()
+        username = value.strip()
+        if User.objects.filter(username__iexact=username).exists():
+            raise serializers.ValidationError("A user with that username already exists.")
+        return username
 
     def validate_email(self, value):
         return value.strip().lower()
