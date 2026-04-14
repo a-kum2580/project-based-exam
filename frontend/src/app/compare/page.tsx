@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -11,7 +11,21 @@ import { moviesAPI } from "@/lib/api";
 import { posterUrl, formatRuntime, formatCurrency, ratingColor } from "@/lib/utils";
 import type { MovieCompact } from "@/types/movie";
 
+<<<<<<< Charis-frontend
+/**
+ * Reusable component for displaying comparison bars.
+ */
+interface CompareBarProps {
+  label: string;
+  valueA: number;
+  valueB: number;
+  higher: "higher" | "lower";
+}
+
+function CompareBar({ label, valueA, valueB, higher }: CompareBarProps) {
+=======
 function CompareBar({ label, valueA, valueB, higher }: { label: string; valueA: number; valueB: number; higher: "higher" | "lower" }) {
+>>>>>>> main
   const max = Math.max(valueA, valueB, 1);
   const pctA = (valueA / max) * 100;
   const pctB = (valueB / max) * 100;
@@ -47,7 +61,25 @@ function CompareBar({ label, valueA, valueB, higher }: { label: string; valueA: 
   );
 }
 
+<<<<<<< Charis-frontend
+/**
+ * Reusable component for searching and displaying a selected movie.
+ */
+interface MovieSelectorProps {
+  side: "A" | "B";
+  results: any[];
+  searching: boolean;
+  movie: any;
+  inputRef: React.RefObject<HTMLInputElement>;
+  onSearch: (query: string, side: "A" | "B") => void;
+  onSelect: (tmdbId: number, side: "A" | "B") => void;
+  onClear: () => void;
+}
+
+function MovieSelector({ side, results, searching, movie, inputRef, onSearch, onSelect, onClear }: MovieSelectorProps) {
+=======
 function MovieSelector({ side, search, setSearch, results, searching, movie, clear, onSearch, onSelect }: any) {
+>>>>>>> main
   return (
     <div className="flex-1 min-w-0">
       {movie ? (
@@ -63,7 +95,11 @@ function MovieSelector({ side, search, setSearch, results, searching, movie, cle
               />
             </div>
             <button
+<<<<<<< Charis-frontend
+              onClick={onClear}
+=======
               onClick={clear}
+>>>>>>> main
               className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-surface-3 border border-white/10 flex items-center justify-center text-white/40 hover:text-white hover:bg-red-500/20 transition-colors"
             >
               <X className="w-3 h-3" />
@@ -80,12 +116,18 @@ function MovieSelector({ side, search, setSearch, results, searching, movie, cle
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25" />
             <input
+<<<<<<< Charis-frontend
+              ref={inputRef}
+              type="text"
+              onChange={(e) => onSearch(e.target.value, side)}
+=======
               type="text"
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
                 onSearch(e.target.value, side);
               }}
+>>>>>>> main
               placeholder={`Search movie ${side}...`}
               className="w-full h-12 pl-11 pr-4 rounded-xl bg-surface-2 border border-white/[0.08] text-white placeholder:text-white/20 outline-none focus:border-gold/40 transition-all text-sm font-body"
             />
@@ -94,16 +136,28 @@ function MovieSelector({ side, search, setSearch, results, searching, movie, cle
 
           {results.length > 0 && (
             <div className="absolute top-14 left-0 right-0 glass-card rounded-xl p-1.5 z-20 shadow-xl animate-fade-in">
+<<<<<<< Charis-frontend
+              {results.map((result: any) => (
+                <button
+                  key={result.id || result.tmdb_id}
+                  onClick={() => onSelect(result.tmdb_id || result.id, side)}
+=======
               {results.map((m: any) => (
                 <button
                   key={m.id || m.tmdb_id}
                   onClick={() => onSelect(m.tmdb_id || m.id, side)}
+>>>>>>> main
                   className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-white/5 text-left transition-colors"
                 >
                   <div className="w-8 h-12 rounded bg-surface-3 overflow-hidden flex-shrink-0">
                     <Image
+<<<<<<< Charis-frontend
+                      src={posterUrl(result.poster_url || result.poster_path, "w185")}
+                      alt={result.title}
+=======
                       src={posterUrl(m.poster_url || m.poster_path, "w185")}
                       alt={m.title}
+>>>>>>> main
                       width={32}
                       height={48}
                       className="w-full h-full object-cover"
@@ -111,15 +165,24 @@ function MovieSelector({ side, search, setSearch, results, searching, movie, cle
                     />
                   </div>
                   <div className="min-w-0">
+<<<<<<< Charis-frontend
+                    <p className="text-sm font-medium truncate">{result.title}</p>
+                    <p className="text-[11px] text-white/30">{result.year}</p>
+=======
                     <p className="text-sm font-medium truncate">{m.title}</p>
                     <p className="text-[11px] text-white/30">{m.year}</p>
+>>>>>>> main
                   </div>
                 </button>
               ))}
             </div>
           )}
 
+<<<<<<< Charis-frontend
+          {results.length === 0 && (
+=======
           {!search && (
+>>>>>>> main
             <div className="mt-6 text-center">
               <div className="w-14 h-20 rounded-lg border-2 border-dashed border-white/10 flex items-center justify-center mx-auto mb-3">
                 <Search className="w-5 h-5 text-white/10" />
@@ -133,9 +196,77 @@ function MovieSelector({ side, search, setSearch, results, searching, movie, cle
   );
 }
 
+<<<<<<< Charis-frontend
+/**
+ * Displays a list of genres, aligned to the start or end.
+ */
+interface GenreListProps {
+  genres: { id: number; name: string }[];
+  justify: "start" | "end";
+}
+
+function GenreList({ genres, justify }: GenreListProps) {
+  return (
+    <div className="flex-1">
+      <div className={`flex flex-wrap gap-1.5 ${justify === "end" ? "justify-end" : "justify-start"}`}>
+        {(genres || []).map((genre) => (
+          <span key={genre.id} className="px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-[11px] text-white/50">
+            {genre.name}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Displays a single cast member's card.
+ */
+interface CastMemberCardProps {
+  member: any;
+  align: "left" | "right";
+}
+
+function CastMemberCard({ member, align }: CastMemberCardProps) {
+  const profileImage = (
+    <div className="w-7 h-7 rounded-full overflow-hidden bg-surface-3 flex-shrink-0">
+      {member.profile_path ? (
+        <Image src={`https://image.tmdb.org/t/p/w185${member.profile_path}`} alt={member.name} width={28} height={28} className="w-full h-full object-cover" unoptimized />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-[9px] text-white/15">{member.name?.[0]}</div>
+      )}
+    </div>
+  );
+
+  const memberDetails = (
+    <div className={align === "right" ? "text-right" : ""}>
+      <p className="text-[12px] text-white/60">{member.name}</p>
+      <p className="text-[10px] text-white/25">{member.character}</p>
+    </div>
+  );
+
+  return (
+    <div className={`flex items-center gap-2 ${align === "right" ? "justify-end" : ""}`}>
+      {align === "right" ? <>{memberDetails}{profileImage}</> : <>{profileImage}{memberDetails}</>}
+    </div>
+  );
+}
+
+/**
+ * Displays a list of cast members.
+ */
+interface CastListProps {
+  cast: any[];
+  align: "left" | "right";
+}
+
+function CastList({ cast, align }: CastListProps) {
+  return <div className="flex-1 space-y-1.5">{(cast || []).slice(0, 5).map((castMember) => <CastMemberCard key={castMember.id} member={castMember} align={align} />)}</div>;
+}
+
+=======
+>>>>>>> main
 export default function ComparePage() {
-  const [searchA, setSearchA] = useState("");
-  const [searchB, setSearchB] = useState("");
   const [resultsA, setResultsA] = useState<MovieCompact[]>([]);
   const [resultsB, setResultsB] = useState<MovieCompact[]>([]);
   const [movieA, setMovieA] = useState<any>(null);
@@ -144,21 +275,63 @@ export default function ComparePage() {
   const [searchingA, setSearchingA] = useState(false);
   const [searchingB, setSearchingB] = useState(false);
 
+  // Refs for debouncing and input values
+  const timeoutRefA = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRefB = useRef<NodeJS.Timeout | null>(null);
+  const inputRefA = useRef<HTMLInputElement>(null);
+  const inputRefB = useRef<HTMLInputElement>(null);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRefA.current) clearTimeout(timeoutRefA.current);
+      if (timeoutRefB.current) clearTimeout(timeoutRefB.current);
+    };
+  }, []);
+
+  /**
+   * Fetches movies based on query and updates the specific side.
+   */
   async function searchMovies(query: string, side: "A" | "B") {
-    if (query.length < 2) {
-      side === "A" ? setResultsA([]) : setResultsB([]);
-      return;
-    }
-    side === "A" ? setSearchingA(true) : setSearchingB(true);
+    const setSearching = side === "A" ? setSearchingA : setSearchingB;
+    const setResults = side === "A" ? setResultsA : setResultsB;
+
+    setSearching(true);
     try {
       const data = await moviesAPI.search(query);
-      side === "A" ? setResultsA(data.results.slice(0, 5)) : setResultsB(data.results.slice(0, 5));
-    } catch { }
-    finally {
-      side === "A" ? setSearchingA(false) : setSearchingB(false);
+      setResults((data.results || []).slice(0, 5));
+    } catch (err) {
+      console.error(`Failed to search for side ${side}:`, err);
+    } finally {
+      setSearching(false);
     }
   }
 
+  // Debounced search function
+  const debouncedSearch = useCallback((query: string, side: "A" | "B") => {
+    const setResults = side === "A" ? setResultsA : setResultsB;
+    // Clear results if query is too short
+    if (query.length < 2) {
+      setResults([]);
+      return;
+    }
+
+    const timeoutRef = side === "A" ? timeoutRefA : timeoutRefB;
+
+    // Clear previous timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    // Set new timeout
+    timeoutRef.current = setTimeout(() => {
+      searchMovies(query, side);
+    }, 500);
+  }, []);
+
+  /**
+   * Fetches movie details and assigns to the selected side.
+   */
   async function selectMovie(tmdbId: number, side: "A" | "B") {
     setLoading(true);
     try {
@@ -166,11 +339,11 @@ export default function ComparePage() {
       if (side === "A") {
         setMovieA(data);
         setResultsA([]);
-        setSearchA("");
+        if (inputRefA.current) inputRefA.current.value = "";
       } else {
         setMovieB(data);
         setResultsB([]);
-        setSearchB("");
+        if (inputRefB.current) inputRefB.current.value = "";
       }
     } catch (err) {
       console.error(err);
@@ -179,6 +352,26 @@ export default function ComparePage() {
     }
   }
 
+<<<<<<< Charis-frontend
+  function swapMovies() {
+    if (!movieA || !movieB) return;
+
+    // Swap movies
+    setMovieA(movieB);
+    setMovieB(movieA);
+
+    // Swap input values
+    const tempValueA = inputRefA.current?.value || "";
+    const tempValueB = inputRefB.current?.value || "";
+    if (inputRefA.current) inputRefA.current.value = tempValueB;
+    if (inputRefB.current) inputRefB.current.value = tempValueA;
+
+    // Swap results
+    setResultsA(resultsB);
+    setResultsB(resultsA);
+  }
+=======
+>>>>>>> main
 
   const bothSelected = movieA && movieB;
 
@@ -202,32 +395,47 @@ export default function ComparePage() {
       <div className="flex items-start gap-6 mb-12">
         <MovieSelector
           side="A"
-          search={searchA}
-          setSearch={setSearchA}
           results={resultsA}
           searching={searchingA}
           movie={movieA}
+<<<<<<< Charis-frontend
+          inputRef={inputRefA}
+          onSearch={debouncedSearch}
+          onSelect={selectMovie}
+          onClear={() => setMovieA(null)}
+=======
           clear={() => setMovieA(null)}
           onSearch={searchMovies}
           onSelect={selectMovie}
+>>>>>>> main
         />
 
         <div className="flex-shrink-0 pt-8">
-          <div className="w-12 h-12 rounded-full glass-card flex items-center justify-center">
+          <button
+            type="button"
+            onClick={swapMovies}
+            disabled={!bothSelected}
+            className="w-12 h-12 rounded-full glass-card flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-gold/40 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
             <ArrowLeftRight className="w-5 h-5 text-gold/50" />
-          </div>
+          </button>
         </div>
 
         <MovieSelector
           side="B"
-          search={searchB}
-          setSearch={setSearchB}
           results={resultsB}
           searching={searchingB}
           movie={movieB}
+<<<<<<< Charis-frontend
+          inputRef={inputRefB}
+          onSearch={debouncedSearch}
+          onSelect={selectMovie}
+          onClear={() => setMovieB(null)}
+=======
           clear={() => setMovieB(null)}
           onSearch={searchMovies}
           onSelect={selectMovie}
+>>>>>>> main
         />
       </div>
 
@@ -249,25 +457,9 @@ export default function ComparePage() {
           <div className="mt-6 pt-6 border-t border-white/[0.04]">
             <p className="text-[11px] uppercase tracking-wider text-white/25 font-semibold text-center mb-4">Genres</p>
             <div className="flex gap-6">
-              <div className="flex-1 text-right">
-                <div className="flex flex-wrap gap-1.5 justify-end">
-                  {(movieA.genres || []).map((g: any) => (
-                    <span key={g.id} className="px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-[11px] text-white/50">
-                      {g.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
+              <GenreList genres={movieA.genres} justify="end" />
               <div className="flex-shrink-0 w-px bg-white/[0.06]" />
-              <div className="flex-1">
-                <div className="flex flex-wrap gap-1.5">
-                  {(movieB.genres || []).map((g: any) => (
-                    <span key={g.id} className="px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-[11px] text-white/50">
-                      {g.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
+              <GenreList genres={movieB.genres} justify="start" />
             </div>
           </div>
 
@@ -275,49 +467,9 @@ export default function ComparePage() {
           <div className="mt-6 pt-6 border-t border-white/[0.04]">
             <p className="text-[11px] uppercase tracking-wider text-white/25 font-semibold text-center mb-4">Top Cast</p>
             <div className="flex gap-6">
-              <div className="flex-1 space-y-1.5">
-                {(movieA.credits?.cast || []).slice(0, 5).map((c: any) => (
-                  <div key={c.id} className="flex items-center gap-2 justify-end">
-                    <div className="text-right">
-                      <p className="text-[12px] text-white/60">{c.name}</p>
-                      <p className="text-[10px] text-white/25">{c.character}</p>
-                    </div>
-                    <div className="w-7 h-7 rounded-full overflow-hidden bg-surface-3 flex-shrink-0">
-                      {c.profile_path ? (
-                        <Image
-                          src={`https://image.tmdb.org/t/p/w185${c.profile_path}`}
-                          alt={c.name} width={28} height={28}
-                          className="w-full h-full object-cover" unoptimized
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[9px] text-white/15">{c.name?.[0]}</div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <CastList cast={movieA.credits?.cast} align="right" />
               <div className="flex-shrink-0 w-px bg-white/[0.06]" />
-              <div className="flex-1 space-y-1.5">
-                {(movieB.credits?.cast || []).slice(0, 5).map((c: any) => (
-                  <div key={c.id} className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full overflow-hidden bg-surface-3 flex-shrink-0">
-                      {c.profile_path ? (
-                        <Image
-                          src={`https://image.tmdb.org/t/p/w185${c.profile_path}`}
-                          alt={c.name} width={28} height={28}
-                          className="w-full h-full object-cover" unoptimized
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[9px] text-white/15">{c.name?.[0]}</div>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-[12px] text-white/60">{c.name}</p>
-                      <p className="text-[10px] text-white/25">{c.character}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <CastList cast={movieB.credits?.cast} align="left" />
             </div>
           </div>
         </div>

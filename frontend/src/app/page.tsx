@@ -10,8 +10,12 @@ import MoodTeaser from "@/components/MoodTeaser";
 import { moviesAPI } from "@/lib/api";
 import type { MovieCompact } from "@/types/movie";
 
+function SectionDivider() {
+  return <div className="section-divider mx-6 md:mx-10 lg:mx-20" />;
+}
+
 export default function HomePage() {
-  const [trending, setTrending] = useState<any>({});
+  const [trending, setTrending] = useState<MovieCompact[]>([]);
   const [nowPlaying, setNowPlaying] = useState<MovieCompact[]>([]);
   const [topRated, setTopRated] = useState<MovieCompact[]>([]);
   const [loading, setLoading] = useState(true);
@@ -19,15 +23,15 @@ export default function HomePage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [trendRes, npRes, trRes] = await Promise.allSettled([
+        const [trendingRes, nowPlayingRes, topRatedRes] = await Promise.allSettled([
           moviesAPI.trending(),
           moviesAPI.nowPlaying(),
           moviesAPI.topRated(),
         ]);
 
-        if (trendRes.status === "fulfilled") setTrending(trendRes.value);
-        if (npRes.status === "fulfilled") setNowPlaying(npRes.value.results);
-        if (trRes.status === "fulfilled") setTopRated(trRes.value.results);
+        if (trendingRes.status === "fulfilled") setTrending(trendingRes.value.results || []);
+        if (nowPlayingRes.status === "fulfilled") setNowPlaying(nowPlayingRes.value.results || []);
+        if (topRatedRes.status === "fulfilled") setTopRated(topRatedRes.value.results || []);
       } catch (err) {
         console.error("Failed to fetch movies:", err);
       } finally {
@@ -53,7 +57,7 @@ export default function HomePage() {
           href="/search?sort=trending"
         />
 
-        <div className="section-divider mx-6 md:mx-10 lg:mx-20" />
+        <SectionDivider />
 
         {/* Genre grid */}
         <section className="px-6 md:px-10 lg:px-20">
@@ -73,17 +77,17 @@ export default function HomePage() {
           <GenreGrid />
         </section>
 
-        <div className="section-divider mx-6 md:mx-10 lg:mx-20" />
+        <SectionDivider />
 
         {/* Mood picker teaser */}
         <MoodTeaser />
 
-        <div className="section-divider mx-6 md:mx-10 lg:mx-20" />
+        <SectionDivider />
 
         {/* Personalized recommendations */}
         <PersonalizedSection movies={topRated} />
 
-        <div className="section-divider mx-6 md:mx-10 lg:mx-20" />
+        <SectionDivider />
 
         {/* Now in theatres */}
         <MovieCarousel
