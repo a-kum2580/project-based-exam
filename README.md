@@ -46,12 +46,19 @@ cp .env.example .env
 Then fill in your actual values:
 
 - `TMDB_API_KEY` - Get your free API key from https://www.themoviedb.org/settings/api
-- `SECRET_KEY` - Any random secret string
+- `DJANGO_SECRET_KEY` - Any random secret string
 - `DEBUG` - Set to `True` for development, `False` for production
 - `ALLOWED_HOSTS` - Comma separated list of allowed hosts
 - `CORS_ORIGINS` - Comma separated list of allowed frontend origins
 
 > **Note:** Never commit your `.env` file to GitHub. It is already listed in `.gitignore`.
+
+### Auth & Registration Rules (Backend)
+- **Username uniqueness is case-insensitive**: `Shira` and `shira` are treated as the same username.
+- **Login is case-insensitive**: you can sign in with any casing of your username.
+- **Password rules (in addition to Django validators)**:
+  - Must start with a **capital letter**
+  - Must include at least **one special character** (e.g. `!@#$`)
 
 ## TMDB API
 Get your free API key at: https://www.themoviedb.org/settings/api

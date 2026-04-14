@@ -45,7 +45,7 @@ export default function HeroSection({ movies }: HeroSectionProps) {
 
   if (!heroMovies.length) {
     return (
-      <div className="h-[90vh] flex items-center justify-center relative overflow-hidden">
+      <div className="min-h-[70vh] sm:min-h-[80vh] flex items-center justify-center relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-surface-1 to-surface-0" />
         <div className="relative text-center space-y-5 animate-slide-up">
           <h1 className="text-6xl md:text-8xl font-bold font-display">
@@ -64,7 +64,7 @@ export default function HeroSection({ movies }: HeroSectionProps) {
 
   return (
     <div
-      className="relative h-[92vh] overflow-hidden"
+      className="relative min-h-[70vh] sm:min-h-[80vh] lg:h-[92vh] overflow-hidden"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >

@@ -34,8 +34,8 @@ class RegisterAPITest(APITestCase):
         data = {
             "username": "newuser",
             "email": "new@example.com",
-            "password": "strongpass123",
-            "password_confirm": "strongpass123",
+            "password": "Strongpass123!",
+            "password_confirm": "Strongpass123!",
         }
         response = self.client.post("/api/users/register/", data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -46,7 +46,7 @@ class RegisterAPITest(APITestCase):
         data = {
             "username": "newuser",
             "email": "new@example.com",
-            "password": "strongpass123",
+            "password": "Strongpass123!",
             "password_confirm": "differentpass",
         }
         response = self.client.post("/api/users/register/", data)
@@ -63,12 +63,12 @@ class RegisterAPITest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_register_duplicate_username(self):
-        User.objects.create_user(username="existing", password="testpass123")
+        User.objects.create_user(username="Existing", password="testpass123")
         data = {
             "username": "existing",
             "email": "new@example.com",
-            "password": "strongpass123",
-            "password_confirm": "strongpass123",
+            "password": "Strongpass123!",
+            "password_confirm": "Strongpass123!",
         }
         response = self.client.post("/api/users/register/", data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

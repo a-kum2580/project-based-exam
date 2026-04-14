@@ -2,6 +2,11 @@ from django.test import TestCase
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 from rest_framework import status
+from unittest.mock import patch, MagicMock
+
+from movies.models import Genre
+from movies.services.tmdb_service import TMDBService
+from recommendations.services.engine import RecommendationEngine
 
 from .models import UserMovieInteraction, UserGenrePreference, Watchlist
 
@@ -145,3 +150,65 @@ class DashboardAPITest(APITestCase):
         response = self.client.get("/api/recommendations/dashboard/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["summary"]["likes"], 1)
+
+class RecommendationEnginePreferencesTest(TestCase):
+    """Verify the engine computes normalised genre weights from interactions."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="recuser", password="pass12345")
+        Genre.objects.create(tmdb_id=28, name="Action", slug="action")
+        Genre.objects.create(tmdb_id=18, name="Drama", slug="drama")
+
+        # Two "like" interactions (weight 5 each) for Action  → total 10
+        # One "view" interaction (weight 1) for Drama          → total  1
+        UserMovieInteraction.objects.create(
+            user=self.user, movie_tmdb_id=1, movie_title="Movie A",
+            interaction_type="like", genre_ids=[28],
+        )
+        UserMovieInteraction.objects.create(
+            user=self.user, movie_tmdb_id=2, movie_title="Movie B",
+            interaction_type="like", genre_ids=[28],
+        )
+        UserMovieInteraction.objects.create(
+            user=self.user, movie_tmdb_id=3, movie_title="Movie C",
+            interaction_type="view", genre_ids=[18],
+        )
+
+    def test_genre_weights_normalised_correctly(self):
+        engine = RecommendationEngine()
+        prefs = engine.compute_genre_preferences(self.user)
+
+        # prefs is a list of (genre_id, normalised_score) sorted desc
+        pref_dict = dict(prefs)
+
+        # Action had raw score 10 → should normalise to 100 (max)
+        self.assertEqual(pref_dict[28], 100.0)
+
+        # Drama had raw score 1 → (1/10)*100 = 10.0
+        self.assertEqual(pref_dict[18], 10.0)
+
+        # Verify DB records were saved
+        db_pref = UserGenrePreference.objects.get(user=self.user, genre_tmdb_id=28)
+        self.assertEqual(db_pref.weight, 100.0)
+        self.assertEqual(db_pref.genre_name, "Action")
+
+class RecommendationEngineNewUserTest(TestCase):
+    """A user with zero interactions should receive trending movies."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="newuser", password="pass12345")
+
+    @patch.object(TMDBService, "get_trending_movies")
+    def test_new_user_gets_trending_fallback(self, mock_trending):
+        mock_trending.return_value = {
+            "results": [
+                {"id": 100, "title": "Trending A"},
+                {"id": 200, "title": "Trending B"},
+            ]
+        }
+        engine = RecommendationEngine()
+        movies = engine.get_recommendations(self.user)
+
+        self.assertEqual(len(movies), 2)
+        self.assertEqual(movies[0]["title"], "Trending A")
+        mock_trending.assert_called_once()

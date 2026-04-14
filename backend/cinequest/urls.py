@@ -3,7 +3,8 @@ from django.urls import path, include
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import TokenRefreshView
+from users.views import CustomTokenObtainPairView
 
 
 @api_view(["GET"])
@@ -48,7 +49,7 @@ def api_root(request):
 urlpatterns = [
     path("", api_root, name="api-root"),
     path("admin/", admin.site.urls),
-    path("api/auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/auth/token/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/users/", include("users.urls")),
     path("api/movies/", include("movies.urls")),

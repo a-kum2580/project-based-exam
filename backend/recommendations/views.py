@@ -1,7 +1,12 @@
+from datetime import timedelta
+from collections import Counter
+
+from django.db.models import Count, Avg
+from django.db.models.functions import TruncDate
 from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, permission_classes, action
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .models import UserMovieInteraction, UserGenrePreference, Watchlist
@@ -16,14 +21,59 @@ from movies.serializers import TMDBMovieSerializer
 engine = RecommendationEngine()
 
 
+def _parse_page(request, default=1):
+    """Parse a positive int `page` query param."""
+    try:
+        page = int(request.query_params.get("page", default))
+        return page if page > 0 else default
+    except (TypeError, ValueError):
+        return default
+
+
+def _build_genre_distribution(interactions_qs, limit=10):
+    """
+    Build a top-N genre distribution based on stored interaction.genre_ids.
+    Returns: [{name, tmdb_id, count}, ...]
+    """
+    from movies.models import Genre
+
+    genre_counter = Counter()
+    for interaction in interactions_qs.filter(interaction_type__in=["like", "watched", "watchlist"]):
+        for gid in interaction.genre_ids:
+            genre_counter[gid] += 1
+
+    genre_name_map = {g.tmdb_id: g.name for g in Genre.objects.all()}
+    return [
+        {"name": genre_name_map.get(gid, f"Genre {gid}"), "tmdb_id": gid, "count": count}
+        for gid, count in genre_counter.most_common(limit)
+    ]
+
+
+def _build_activity_timeline(interactions_qs, days=30):
+    """Build daily interaction counts for the last N days."""
+    start = timezone.now() - timedelta(days=days)
+    daily = (
+        interactions_qs.filter(created_at__gte=start)
+        .annotate(date=TruncDate("created_at"))
+        .values("date")
+        .annotate(count=Count("id"))
+        .order_by("date")
+    )
+    return [{"date": str(d["date"]), "count": d["count"]} for d in daily]
+
+
+def _build_preference_scores(user, limit=10):
+    """Compute and return top-N saved preference scores for the user."""
+    engine.compute_genre_preferences(user)
+    prefs = UserGenrePreference.objects.filter(user=user).order_by("-weight")[:limit]
+    return [{"name": p.genre_name, "weight": round(p.weight, 1), "count": p.interaction_count} for p in prefs]
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def personalized_recommendations(request):
     """GET /api/recommendations/for-you/ → personalized picks."""
-    try:
-        page = int(request.query_params.get("page", 1))
-    except (TypeError, ValueError):
-        page = 1
+    page = _parse_page(request, default=1)
     movies = engine.get_recommendations(request.user, page=page)
     serializer = TMDBMovieSerializer(movies, many=True)
     return Response({"results": serializer.data})
@@ -100,84 +150,30 @@ def dashboard_stats(request):
     GET /api/recommendations/dashboard/
     Returns aggregated stats for the user's dashboard.
     """
-    from collections import Counter
-    from django.db.models import Count, Avg
-    from django.db.models.functions import TruncDate
-
     user = request.user
 
-    ## all interactions
     interactions = UserMovieInteraction.objects.filter(user=user)
-    total_interactions = interactions.count()
-    likes = interactions.filter(interaction_type="like").count()
-    dislikes = interactions.filter(interaction_type="dislike").count()
-    watched = interactions.filter(interaction_type="watched").count()
-    searches = interactions.filter(interaction_type="search").count()
-
-    ### watchlist stats
     watchlist = Watchlist.objects.filter(user=user)
-    watchlist_total = watchlist.count()
-    watchlist_watched = watchlist.filter(watched=True).count()
 
-    ## genre distribution from interactions
-    genre_counter = Counter()
-    for interaction in interactions.filter(interaction_type__in=["like", "watched", "watchlist"]):
-        for gid in interaction.genre_ids:
-            genre_counter[gid] += 1
+    summary = {
+        "total_interactions": interactions.count(),
+        "likes": interactions.filter(interaction_type="like").count(),
+        "dislikes": interactions.filter(interaction_type="dislike").count(),
+        "watched": interactions.filter(interaction_type="watched").count(),
+        "searches": interactions.filter(interaction_type="search").count(),
+        "watchlist_total": watchlist.count(),
+        "watchlist_watched": watchlist.filter(watched=True).count(),
+        "average_rating": None,
+    }
 
-    ## mapping genre IDs to names (pre-fetch all to avoid N+1)
-    from movies.models import Genre
-    genre_name_map = {g.tmdb_id: g.name for g in Genre.objects.all()}
-    genre_distribution = []
-    for gid, count in genre_counter.most_common(10):
-        genre_distribution.append({
-            "name": genre_name_map.get(gid, f"Genre {gid}"),
-            "tmdb_id": gid,
-            "count": count,
-        })
-
-    engine.compute_genre_preferences(user)
-    prefs = UserGenrePreference.objects.filter(user=user).order_by("-weight")[:10]
-    preference_scores = [
-        {"name": p.genre_name, "weight": round(p.weight, 1), "count": p.interaction_count}
-        for p in prefs
-    ]
-
-    ## the activity over time (last 30 days)
-    from datetime import timedelta
-    thirty_days_ago = timezone.now() - timedelta(days=30)
-    daily_activity = (
-        interactions.filter(created_at__gte=thirty_days_ago)
-        .annotate(date=TruncDate("created_at"))
-        .values("date")
-        .annotate(count=Count("id"))
-        .order_by("date")
-    )
-    activity_timeline = [
-        {"date": str(d["date"]), "count": d["count"]}
-        for d in daily_activity
-    ]
-
-    ### recent interactions
-    recent = interactions.order_by("-created_at")[:10]
-    recent_data = UserMovieInteractionSerializer(recent, many=True).data
-
-    ### average rating given
     avg_rating = interactions.filter(rating__isnull=False).aggregate(avg=Avg("rating"))["avg"]
+    if avg_rating is not None:
+        summary["average_rating"] = round(avg_rating, 1)
 
     return Response({
-        "summary": {
-            "total_interactions": total_interactions,
-            "likes": likes,
-            "dislikes": dislikes,
-            "watched": watched,
-            "searches": searches,
-            "watchlist_total": watchlist_total,
-            "watchlist_watched": watchlist_watched,
-            "average_rating": round(avg_rating, 1) if avg_rating else None,
-        },
-        "genre_distribution": genre_distribution,
-        "preference_scores": preference_scores,
-        "activity_timeline": activity_timeline,
-        "recent_activity": recent_data,
+        "summary": summary,
+        "genre_distribution": _build_genre_distribution(interactions),
+        "preference_scores": _build_preference_scores(user),
+        "activity_timeline": _build_activity_timeline(interactions),
+        "recent_activity": UserMovieInteractionSerializer(interactions.order_by("-created_at")[:10], many=True).data,
     })
