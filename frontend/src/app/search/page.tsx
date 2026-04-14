@@ -123,6 +123,7 @@ function SearchContent() {
         sort: filterSort,
         page: p,
       };
+      if (currentSearchQuery) params.q = currentSearchQuery;
       if (filterGenre) params.genre = filterGenre;
       if (filterYearFrom) params.year_from = filterYearFrom;
       if (filterYearTo) params.year_to = filterYearTo;
@@ -153,6 +154,15 @@ function SearchContent() {
     setFilterRuntimeMax("");
     setFilterLanguage("");
     setFilterSort("popularity.desc");
+  }
+
+  function handleClearFilters() {
+    clearFilters();
+    if (currentSearchQuery) {
+      performSearch(currentSearchQuery, 1);
+    } else {
+      loadCategory(sortParam || "trending", 1);
+    }
   }
 
   function resetFiltersForNewSearch() {
@@ -355,7 +365,7 @@ function SearchContent() {
             </button>
             {hasActiveFilters && (
               <button
-                onClick={clearFilters}
+                onClick={handleClearFilters}
                 className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl glass text-sm text-white/50 hover:text-white transition-colors"
               >
                 <X className="w-3.5 h-3.5" />

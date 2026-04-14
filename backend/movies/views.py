@@ -32,6 +32,14 @@ def safe_int(value, default=1):
     except (TypeError, ValueError):
         return default
 
+
+def safe_float(value, default=None):
+    """Safely parse a float from query params, returning default on failure."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
 ## Movie ViewSet
 class MovieViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Movie.objects.prefetch_related("genres", "directors").all()
@@ -355,38 +363,110 @@ def mood_movies(request, mood_slug):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def discover_filtered(request):
-    params = {}
     page = safe_int(request.query_params.get("page", 1))
-    params["page"] = page
+    query = request.query_params.get("q", "").strip()
 
     genre = request.query_params.get("genre")
+    year_from = safe_int(request.query_params.get("year_from"), default=None)
+    year_to = safe_int(request.query_params.get("year_to"), default=None)
+    rating_min = safe_float(request.query_params.get("rating_min"), default=None)
+    runtime_min = safe_int(request.query_params.get("runtime_min"), default=None)
+    runtime_max = safe_int(request.query_params.get("runtime_max"), default=None)
+    language = request.query_params.get("language")
+    sort = request.query_params.get("sort", "popularity.desc")
+
+    # If a search query is provided, keep filtering within that query's results.
+    if query:
+        first_page_data = tmdb.search_movies(query, page=1)
+        _ensure_tmdb_ok(first_page_data)
+
+        total_search_pages = safe_int(first_page_data.get("total_pages", 1), default=1)
+        # TMDB search caps pagination at 500 pages; scan the full query result set.
+        max_scan_pages = min(total_search_pages, 500)
+
+        all_results = list(first_page_data.get("results", []))
+        for scan_page in range(2, max_scan_pages + 1):
+            page_data = tmdb.search_movies(query, page=scan_page)
+            _ensure_tmdb_ok(page_data)
+            all_results.extend(page_data.get("results", []))
+
+        needs_runtime = runtime_min is not None or runtime_max is not None
+        filtered = []
+        for movie in all_results:
+            movie_year = safe_int((movie.get("release_date") or "")[:4], default=None)
+            movie_rating = safe_float(movie.get("vote_average"), default=0.0) or 0.0
+            movie_genres = set(movie.get("genre_ids", []))
+            movie_language = movie.get("original_language", "")
+
+            if genre and safe_int(genre, default=None) not in movie_genres:
+                continue
+            if year_from and (movie_year is None or movie_year < year_from):
+                continue
+            if year_to and (movie_year is None or movie_year > year_to):
+                continue
+            if rating_min is not None and movie_rating < rating_min:
+                continue
+            if language and movie_language != language:
+                continue
+
+            if needs_runtime:
+                detail = tmdb.get_movie_details(movie.get("id"))
+                _ensure_tmdb_ok(detail)
+                runtime = safe_int(detail.get("runtime"), default=None)
+                if runtime_min is not None and (runtime is None or runtime < runtime_min):
+                    continue
+                if runtime_max is not None and (runtime is None or runtime > runtime_max):
+                    continue
+
+            filtered.append(movie)
+
+        sort_map = {
+            "popularity.desc": lambda m: safe_float(m.get("popularity"), 0.0) or 0.0,
+            "vote_average.desc": lambda m: safe_float(m.get("vote_average"), 0.0) or 0.0,
+            "primary_release_date.desc": lambda m: m.get("release_date") or "",
+            "primary_release_date.asc": lambda m: m.get("release_date") or "",
+        }
+        if sort in sort_map:
+            filtered.sort(key=sort_map[sort], reverse=not sort.endswith(".asc"))
+
+        page_size = len(first_page_data.get("results", [])) or 20
+        filtered_total = len(filtered)
+        filtered_total_pages = max(1, (filtered_total + page_size - 1) // page_size)
+        current_page = min(max(page, 1), filtered_total_pages)
+        start_index = (current_page - 1) * page_size
+        end_index = start_index + page_size
+        page_results = filtered[start_index:end_index]
+
+        serializer = TMDBMovieSerializer(page_results, many=True)
+        return Response({
+            "results": serializer.data,
+            "total_pages": filtered_total_pages,
+            "total_results": filtered_total,
+            "page": current_page,
+            "query": query,
+        })
+
+    params = {"page": page}
     if genre:
         params["with_genres"] = genre
 
-    year_from = request.query_params.get("year_from")
-    year_to = request.query_params.get("year_to")
     if year_from:
         params["primary_release_date.gte"] = f"{year_from}-01-01"
     if year_to:
         params["primary_release_date.lte"] = f"{year_to}-12-31"
 
-    rating_min = request.query_params.get("rating_min")
     if rating_min:
-        params["vote_average.gte"] = float(rating_min)
+        params["vote_average.gte"] = rating_min
         params["vote_count.gte"] = 50 
 
-    runtime_min = request.query_params.get("runtime_min")
-    runtime_max = request.query_params.get("runtime_max")
     if runtime_min:
-        params["with_runtime.gte"] = int(runtime_min)
+        params["with_runtime.gte"] = runtime_min
     if runtime_max:
-        params["with_runtime.lte"] = int(runtime_max)
+        params["with_runtime.lte"] = runtime_max
 
-    language = request.query_params.get("language")
     if language:
         params["with_original_language"] = language
 
-    sort = request.query_params.get("sort", "popularity.desc")
     params["sort_by"] = sort
 
     data = tmdb.discover_movies(**params)
