@@ -7,8 +7,29 @@ User = get_user_model()
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id", "username", "email", "avatar_url", "favorite_genres", "country_code", "date_joined"]
+        fields = [
+            "id",
+            "username",
+            "email",
+            "avatar_url",
+            "favorite_genres",
+            "country_code",
+            "date_joined",
+        ]
         read_only_fields = ["id", "date_joined"]
+
+
+
+class PasswordMatchValidator:
+    """Single responsibility: validate passwords match."""
+
+    @staticmethod
+    def validate(password, password_confirm):
+        if password != password_confirm:
+            raise serializers.ValidationError({
+                "password_confirm": "Passwords don't match."
+            })
+
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -20,11 +41,12 @@ class RegisterSerializer(serializers.ModelSerializer):
         fields = ["username", "email", "password", "password_confirm"]
 
     def validate(self, data):
-        if data["password"] != data["password_confirm"]:
-            raise serializers.ValidationError({"password_confirm": "Passwords don't match."})
+        PasswordMatchValidator.validate(
+            data["password"],
+            data["password_confirm"]
+        )
         return data
 
     def create(self, validated_data):
         validated_data.pop("password_confirm")
-        user = User.objects.create_user(**validated_data)
-        return user
+        return User.objects.create_user(**validated_data)
