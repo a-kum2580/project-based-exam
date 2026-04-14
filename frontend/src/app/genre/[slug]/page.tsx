@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import MovieCard, { MovieCardSkeleton } from "@/components/MovieCard";
-import { genresAPI } from "@/lib/api";
+import { genresAPI, moviesAPI } from "@/lib/api";
 import type { MovieCompact } from "@/types/movie";
 
 function GenreContent() {
@@ -28,17 +28,21 @@ function GenreContent() {
     async function fetchMovies() {
       setLoading(true);
       try {
-        const data = await genresAPI.getMovies(slug, page);
+        const data = genreId
+          ? await moviesAPI.discover({ genre: genreId, page, sort: "popularity.desc" })
+          : await genresAPI.getMovies(slug, page);
         setMovies(data.results || []);
         setTotalPages(data.total_pages || 1);
       } catch (err) {
         console.error(err);
+        setMovies([]);
+        setTotalPages(1);
       } finally {
         setLoading(false);
       }
     }
     fetchMovies();
-  }, [slug, page]);
+  }, [slug, page, genreId]);
 
   return (
     <div className="pt-24 pb-20 px-6 md:px-12 lg:px-20 max-w-[1400px] mx-auto">
