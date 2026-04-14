@@ -400,6 +400,13 @@ function SearchContent() {
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-3 mt-12">
               <button
+                onClick={() => handlePageChange(1)}
+                disabled={page <= 1}
+                className="px-5 py-2.5 rounded-xl glass-card text-sm font-medium disabled:opacity-20 hover:border-gold/15 transition-all"
+              >
+                First
+              </button>
+              <button
                 onClick={() => handlePageChange(page - 1)}
                 disabled={page <= 1}
                 className="px-5 py-2.5 rounded-xl glass-card text-sm font-medium disabled:opacity-20 hover:border-gold/15 transition-all"
@@ -415,6 +422,13 @@ function SearchContent() {
                 className="px-5 py-2.5 rounded-xl glass-card text-sm font-medium disabled:opacity-20 hover:border-gold/15 transition-all"
               >
                 Next
+              </button>
+              <button
+                onClick={() => handlePageChange(Math.min(totalPages, 500))}
+                disabled={page >= Math.min(totalPages, 500)}
+                className="px-5 py-2.5 rounded-xl glass-card text-sm font-medium disabled:opacity-20 hover:border-gold/15 transition-all"
+              >
+                Last
               </button>
             </div>
           )}
