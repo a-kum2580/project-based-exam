@@ -34,6 +34,12 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate(self, data):
         if data["password"] != data["password_confirm"]:
             raise serializers.ValidationError({"password_confirm": "Passwords don't match."})
+
+        password = data.get("password") or ""
+        if not password[:1].isupper():
+            raise serializers.ValidationError({"password": "Password must start with a capital letter."})
+        if not re.search(r"[^A-Za-z0-9]", password):
+            raise serializers.ValidationError({"password": "Password must include at least one special character (e.g. !@#$)."})
         
         # Enforce strong password complexity
         validate_password(data["password"])
