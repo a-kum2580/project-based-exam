@@ -10,6 +10,94 @@ interface PersonalizedSectionProps {
   movies: MovieCompact[];
 }
 
+interface FeaturePillProps {
+  icon: React.ElementType;
+  label: string;
+}
+
+function FeaturePill({ icon: Icon, label }: FeaturePillProps) {
+  return (
+    <div className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-white/[0.03] border border-white/[0.06]">
+      <Icon className="w-3.5 h-3.5 text-gold/60" />
+      <span className="text-[12px] text-white/50">{label}</span>
+    </div>
+  );
+}
+
+interface FeaturedMovieCardProps {
+  movie: MovieCompact;
+  index: number;
+}
+
+function FeaturedMovieCard({ movie, index }: FeaturedMovieCardProps) {
+  const pUrl = posterUrl(
+    movie.poster_url || (movie as any).poster_path,
+    "w500"
+  );
+  
+  return (
+    <Link
+      href={`/movie/${movie.tmdb_id || movie.id}`}
+      className="relative group/poster"
+      style={{
+        transform: `rotate(${(index - 1.5) * 3}deg)`,
+        zIndex: index === 1 || index === 2 ? 2 : 1,
+      }}
+    >
+      <div className="w-[110px] md:w-[130px] h-[165px] md:h-[195px] rounded-xl overflow-hidden shadow-2xl shadow-black/50 border border-white/[0.08] transition-all duration-400 group-hover/poster:scale-105 group-hover/poster:border-gold/20 group-hover/poster:shadow-gold/10">
+        <Image
+          src={pUrl}
+          alt={movie.title}
+          fill
+          className="object-cover"
+          unoptimized
+        />
+        {/* Rating overlay */}
+        <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
+          <div className="flex items-center gap-1">
+            <Star className="w-3 h-3 text-gold fill-gold" />
+            <span className="text-[10px] font-bold text-gold">
+              {movie.vote_average?.toFixed(1)}
+            </span>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+interface QuickPickCardProps {
+  movie: MovieCompact;
+}
+
+function QuickPickCard({ movie }: QuickPickCardProps) {
+  const pUrl = posterUrl(
+    movie.poster_url || (movie as any).poster_path,
+    "w185"
+  );
+  
+  return (
+    <Link
+      href={`/movie/${movie.tmdb_id || movie.id}`}
+      className="group relative rounded-lg overflow-hidden aspect-[2/3] bg-surface-2"
+    >
+      <Image
+        src={pUrl}
+        alt={movie.title}
+        fill
+        className="object-cover transition-transform duration-500 group-hover:scale-110"
+        unoptimized
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+        <p className="text-[10px] font-medium text-white/90 line-clamp-1">{movie.title}</p>
+      </div>
+      {/* Gold border on hover */}
+      <div className="absolute inset-0 rounded-lg border border-transparent group-hover:border-gold/20 transition-colors duration-300 pointer-events-none" />
+    </Link>
+  );
+}
+
 export default function PersonalizedSection({ movies }: PersonalizedSectionProps) {
   const safeMovies = Array.isArray(movies) ? movies : [];
   const featured = safeMovies.slice(0, 4);
@@ -54,13 +142,7 @@ export default function PersonalizedSection({ movies }: PersonalizedSectionProps
                 { icon: TrendingUp, label: "Get smart picks" },
                 { icon: Bookmark, label: "Build your watchlist" },
               ].map(({ icon: Icon, label }) => (
-                <div
-                  key={label}
-                  className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-white/[0.03] border border-white/[0.06]"
-                >
-                  <Icon className="w-3.5 h-3.5 text-gold/60" />
-                  <span className="text-[12px] text-white/50">{label}</span>
-                </div>
+                <FeaturePill key={label} icon={Icon} label={label} />
               ))}
             </div>
 
@@ -76,42 +158,13 @@ export default function PersonalizedSection({ movies }: PersonalizedSectionProps
           {/* Right:stacked movie posters */}
           <div className="relative w-full lg:w-auto flex-shrink-0">
             <div className="flex gap-3 justify-center lg:justify-end">
-              {featured.map((movie, index) => {
-                const pUrl = posterUrl(
-                  movie.poster_url || (movie as any).poster_path,
-                  "w500"
-                );
-                return (
-                  <Link
-                    key={movie.id || movie.tmdb_id}
-                    href={`/movie/${movie.tmdb_id || movie.id}`}
-                    className="relative group/poster"
-                    style={{
-                      transform: `rotate(${(index - 1.5) * 3}deg)`,
-                      zIndex: index === 1 || index === 2 ? 2 : 1,
-                    }}
-                  >
-                    <div className="w-[110px] md:w-[130px] h-[165px] md:h-[195px] rounded-xl overflow-hidden shadow-2xl shadow-black/50 border border-white/[0.08] transition-all duration-400 group-hover/poster:scale-105 group-hover/poster:border-gold/20 group-hover/poster:shadow-gold/10">
-                      <Image
-                        src={pUrl}
-                        alt={movie.title}
-                        fill
-                        className="object-cover"
-                        unoptimized
-                      />
-                      {/* Rating overlay */}
-                      <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
-                        <div className="flex items-center gap-1">
-                          <Star className="w-3 h-3 text-gold fill-gold" />
-                          <span className="text-[10px] font-bold text-gold">
-                            {movie.vote_average?.toFixed(1)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })}
+              {featured.map((movie, index) => (
+                <FeaturedMovieCard
+                  key={movie.id || movie.tmdb_id}
+                  movie={movie}
+                  index={index}
+                />
+              ))}
             </div>
 
             {/* "Curated picks" label underneath */}
@@ -125,33 +178,9 @@ export default function PersonalizedSection({ movies }: PersonalizedSectionProps
       {/* Quick picks row below */}
       {secondary.length > 0 && (
         <div className="mt-6 grid grid-cols-3 sm:grid-cols-6 gap-3">
-          {secondary.map((movie) => {
-            const pUrl = posterUrl(
-              movie.poster_url || (movie as any).poster_path,
-              "w185"
-            );
-            return (
-              <Link
-                key={movie.id || movie.tmdb_id}
-                href={`/movie/${movie.tmdb_id || movie.id}`}
-                className="group relative rounded-lg overflow-hidden aspect-[2/3] bg-surface-2"
-              >
-                <Image
-                  src={pUrl}
-                  alt={movie.title}
-                  fill
-                  className="object-cover transition-transform duration-500 group-hover:scale-110"
-                  unoptimized
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  <p className="text-[10px] font-medium text-white/90 line-clamp-1">{movie.title}</p>
-                </div>
-                {/* Gold border on hover */}
-                <div className="absolute inset-0 rounded-lg border border-transparent group-hover:border-gold/20 transition-colors duration-300 pointer-events-none" />
-              </Link>
-            );
-          })}
+          {secondary.map((movie) => (
+            <QuickPickCard key={movie.id || movie.tmdb_id} movie={movie} />
+          ))}
         </div>
       )}
     </section>
