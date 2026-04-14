@@ -65,6 +65,7 @@ function SearchContent() {
 
   useEffect(() => {
     if (initialQuery) {
+      resetFiltersForNewSearch();
       performSearch(initialQuery, 1);
     } else if (sortParam) {
       loadCategory(sortParam, 1);
@@ -72,6 +73,10 @@ function SearchContent() {
       loadCategory("trending", 1);
     }
   }, [initialQuery, sortParam]);
+
+  useEffect(() => {
+    setQuery(initialQuery);
+  }, [initialQuery]);
 
   async function performSearch(q: string, p: number) {
     if (!q.trim()) return;
@@ -150,9 +155,15 @@ function SearchContent() {
     setFilterSort("popularity.desc");
   }
 
+  function resetFiltersForNewSearch() {
+    clearFilters();
+    setFiltersOpen(false);
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (query.trim()) {
+      resetFiltersForNewSearch();
       performSearch(query, 1);
     }
   }
@@ -165,6 +176,11 @@ function SearchContent() {
     } else {
       loadCategory(sortParam || "trending", newPage);
     }
+  }
+
+  function handleApplyFilters() {
+    setFiltersOpen(false);
+    applyFilters(1);
   }
 
   const categoryLabels: Record<string, string> = {
@@ -332,7 +348,7 @@ function SearchContent() {
           {/* Filter actions */}
           <div className="flex items-center gap-3 pt-3 border-t border-white/[0.04]">
             <button
-              onClick={() => applyFilters(1)}
+              onClick={handleApplyFilters}
               className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-gold to-gold-dim text-surface-0 font-semibold text-sm hover:shadow-lg hover:shadow-gold/15 transition-all"
             >
               Apply Filters
