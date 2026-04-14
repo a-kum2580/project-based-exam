@@ -41,10 +41,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         return data
 
     def validate_username(self, value):
-        return value.title()
+        return value.strip()
 
     def validate_email(self, value):
-        return value.lower()
+        return value.strip().lower()
 
     def create(self, validated_data):
         validated_data.pop("password_confirm")
@@ -54,8 +54,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         # Case-insensitive login: map input username to stored username.
-        # We still normalize to title-case for users created via the register endpoint.
         if "username" in attrs and attrs["username"]:
             match = User.objects.filter(username__iexact=attrs["username"]).only("username").first()
-            attrs["username"] = (match.username if match else attrs["username"].title())
+            attrs["username"] = match.username if match else attrs["username"]
         return super().validate(attrs)
