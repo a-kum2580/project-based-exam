@@ -75,10 +75,13 @@
 
 ### f) Remaining Limitations (known risks / technical debt)
 
-- **Mixed auth modes**: DRF config includes both JWT and Session auth; for a JWT SPA, SessionAuth can introduce CSRF-related confusion later.
-- **GET that mutates DB**: the Wikipedia enrichment flow can write to DB during a GET request (breaks “safe GET” semantics).
-- **External dependency behavior**: TMDB failures may not always propagate as consistent 502/503 errors; could be improved for reliability and debugging.
-- **DB config is dev-first**: SQLite is used by default; production would need env-based DB config (e.g., `DATABASE_URL`).
+- **External dependency behavior**: TMDB failures now surface more clearly, but further work could standardise 502/503 responses across *all* endpoints that call TMDB.
+- **DB config**: `DATABASE_URL` is supported, but local development still defaults to SQLite; production hardening (e.g., strict env requirements, per-env settings) would still be needed for deployment.
+
+### Limitations addressed during development (closed)
+
+- **Mixed auth modes**: removed SessionAuthentication to avoid CSRF/session confusion in a JWT SPA.
+- **GET that mutates DB**: stopped persisting Wikipedia fields during a GET request; endpoint now returns enrichment data without writes.
 
 ## Backend Change Log (quick list)
 
