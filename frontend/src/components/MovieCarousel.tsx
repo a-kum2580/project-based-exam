@@ -34,7 +34,7 @@ export default function MovieCarousel({
 
   const scroll = (direction: "left" | "right") => {
     if (scrollRef.current) {
-      const amount = direction === "left" ? -420 : 420;
+      const amount = Math.round(scrollRef.current.clientWidth * 0.85) * (direction === "left" ? -1 : 1);
       scrollRef.current.scrollBy({ left: amount, behavior: "smooth" });
     }
   };
@@ -42,7 +42,7 @@ export default function MovieCarousel({
   return (
     <section className="relative">
       {/* Header */}
-      <div className="flex items-end justify-between px-6 md:px-10 lg:px-20 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 px-6 md:px-10 lg:px-20 mb-6">
         <div className="flex items-center gap-4">
           {icon && (
             <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center">
@@ -59,17 +59,17 @@ export default function MovieCarousel({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-end sm:self-auto">
           <button
             onClick={() => scroll("left")}
-            className="w-8 h-8 rounded-lg glass flex items-center justify-center hover:border-gold/20 transition-all group"
+            className="w-10 h-10 sm:w-8 sm:h-8 rounded-lg glass flex items-center justify-center hover:border-gold/20 transition-all group"
             aria-label="Scroll left"
           >
             <ChevronLeft className="w-4 h-4 text-white/40 group-hover:text-gold transition-colors" />
           </button>
           <button
             onClick={() => scroll("right")}
-            className="w-8 h-8 rounded-lg glass flex items-center justify-center hover:border-gold/20 transition-all group"
+            className="w-10 h-10 sm:w-8 sm:h-8 rounded-lg glass flex items-center justify-center hover:border-gold/20 transition-all group"
             aria-label="Scroll right"
           >
             <ChevronRight className="w-4 h-4 text-white/40 group-hover:text-gold transition-colors" />
@@ -93,13 +93,12 @@ export default function MovieCarousel({
           className="scroll-x flex gap-4 px-6 md:px-10 lg:px-20 pb-4"
         >
           {loading
-            ? Array.from({ length: 8 }).map((_, i) => (
-                <MovieCardSkeleton key={i} />
-              ))
+            ? Array.from({ length: 8 }).map((_, i) => <MovieCardSkeleton key={i} />)
             : movies.map((movie, i) => (
                 <MovieCard
                   key={movie.id || movie.tmdb_id}
                   movie={movie}
+                  layout="carousel"
                   index={i}
                 />
               ))}
