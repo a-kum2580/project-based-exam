@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -12,8 +12,6 @@ import { posterUrl, formatRuntime, formatCurrency, ratingColor } from "@/lib/uti
 import type { MovieCompact } from "@/types/movie";
 
 export default function ComparePage() {
-  const [searchA, setSearchA] = useState("");
-  const [searchB, setSearchB] = useState("");
   const [resultsA, setResultsA] = useState<MovieCompact[]>([]);
   const [resultsB, setResultsB] = useState<MovieCompact[]>([]);
   const [movieA, setMovieA] = useState<any>(null);
@@ -22,20 +20,51 @@ export default function ComparePage() {
   const [searchingA, setSearchingA] = useState(false);
   const [searchingB, setSearchingB] = useState(false);
 
+  // Refs for debouncing and input values
+  const timeoutRefA = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRefB = useRef<NodeJS.Timeout | null>(null);
+  const inputRefA = useRef<HTMLInputElement>(null);
+  const inputRefB = useRef<HTMLInputElement>(null);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRefA.current) clearTimeout(timeoutRefA.current);
+      if (timeoutRefB.current) clearTimeout(timeoutRefB.current);
+    };
+  }, []);
+
   async function searchMovies(query: string, side: "A" | "B") {
-    if (query.length < 2) {
-      side === "A" ? setResultsA([]) : setResultsB([]);
-      return;
-    }
     side === "A" ? setSearchingA(true) : setSearchingB(true);
     try {
       const data = await moviesAPI.search(query);
-      side === "A" ? setResultsA(data.results.slice(0, 5)) : setResultsB(data.results.slice(0, 5));
+      side === "A" ? setResultsA((data.results || []).slice(0, 5)) : setResultsB((data.results || []).slice(0, 5));
     } catch { }
     finally {
       side === "A" ? setSearchingA(false) : setSearchingB(false);
     }
   }
+
+  // Debounced search function
+  const debouncedSearch = useCallback((query: string, side: "A" | "B") => {
+    // Clear results if query is too short
+    if (query.length < 2) {
+      side === "A" ? setResultsA([]) : setResultsB([]);
+      return;
+    }
+
+    const timeoutRef = side === "A" ? timeoutRefA : timeoutRefB;
+
+    // Clear previous timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    // Set new timeout
+    timeoutRef.current = setTimeout(() => {
+      searchMovies(query, side);
+    }, 500);
+  }, []);
 
   async function selectMovie(tmdbId: number, side: "A" | "B") {
     setLoading(true);
@@ -44,17 +73,35 @@ export default function ComparePage() {
       if (side === "A") {
         setMovieA(data);
         setResultsA([]);
-        setSearchA("");
+        if (inputRefA.current) inputRefA.current.value = "";
       } else {
         setMovieB(data);
         setResultsB([]);
-        setSearchB("");
+        if (inputRefB.current) inputRefB.current.value = "";
       }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
+  }
+
+  function swapMovies() {
+    if (!movieA || !movieB) return;
+
+    // Swap movies
+    setMovieA(movieB);
+    setMovieB(movieA);
+
+    // Swap input values
+    const tempValueA = inputRefA.current?.value || "";
+    const tempValueB = inputRefB.current?.value || "";
+    if (inputRefA.current) inputRefA.current.value = tempValueB;
+    if (inputRefB.current) inputRefB.current.value = tempValueA;
+
+    // Swap results
+    setResultsA(resultsB);
+    setResultsB(resultsA);
   }
 
   function CompareBar({ label, valueA, valueB, higher }: { label: string; valueA: number; valueB: number; higher: "higher" | "lower" }) {
@@ -93,7 +140,7 @@ export default function ComparePage() {
     );
   }
 
-  function MovieSelector({ side, search, setSearch, results, searching, movie, clear }: any) {
+  function MovieSelector({ side, results, searching, movie, clear }: any) {
     return (
       <div className="flex-1 min-w-0">
         {movie ? (
@@ -126,11 +173,10 @@ export default function ComparePage() {
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25" />
               <input
+                ref={side === "A" ? inputRefA : inputRefB}
                 type="text"
-                value={search}
                 onChange={(e) => {
-                  setSearch(e.target.value);
-                  searchMovies(e.target.value, side);
+                  debouncedSearch(e.target.value, side);
                 }}
                 placeholder={`Search movie ${side}...`}
                 className="w-full h-12 pl-11 pr-4 rounded-xl bg-surface-2 border border-white/[0.08] text-white placeholder:text-white/20 outline-none focus:border-gold/40 transition-all text-sm font-body"
@@ -165,7 +211,7 @@ export default function ComparePage() {
               </div>
             )}
 
-            {!search && (
+            {!Search && (
               <div className="mt-6 text-center">
                 <div className="w-14 h-20 rounded-lg border-2 border-dashed border-white/10 flex items-center justify-center mx-auto mb-3">
                   <Search className="w-5 h-5 text-white/10" />
@@ -201,8 +247,6 @@ export default function ComparePage() {
       <div className="flex items-start gap-6 mb-12">
         <MovieSelector
           side="A"
-          search={searchA}
-          setSearch={setSearchA}
           results={resultsA}
           searching={searchingA}
           movie={movieA}
@@ -210,15 +254,18 @@ export default function ComparePage() {
         />
 
         <div className="flex-shrink-0 pt-8">
-          <div className="w-12 h-12 rounded-full glass-card flex items-center justify-center">
+          <button
+            type="button"
+            onClick={swapMovies}
+            disabled={!bothSelected}
+            className="w-12 h-12 rounded-full glass-card flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-gold/40 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
             <ArrowLeftRight className="w-5 h-5 text-gold/50" />
-          </div>
+          </button>
         </div>
 
         <MovieSelector
           side="B"
-          search={searchB}
-          setSearch={setSearchB}
           results={resultsB}
           searching={searchingB}
           movie={movieB}
