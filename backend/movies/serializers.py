@@ -2,6 +2,22 @@ from rest_framework import serializers
 from .models import Genre, Person, Movie, MovieCast, WatchProvider
 
 
+class TMDBImageBuilder:
+    BASE = "https://image.tmdb.org/t/p"
+
+    @staticmethod
+    def poster(path: str, size: str):
+        if path:
+            return f"{TMDBImageBuilder.BASE}/{size}{path}"
+        return None
+
+    @staticmethod
+    def backdrop(path: str):
+        if path:
+            return f"{TMDBImageBuilder.BASE}/w1280{path}"
+        return None
+
+
 class GenreSerializer(serializers.ModelSerializer):
     movie_count = serializers.SerializerMethodField()
 
@@ -61,8 +77,9 @@ class WatchProviderSerializer(serializers.ModelSerializer):
 
 class MovieCompactSerializer(serializers.ModelSerializer):
     """Lightweight movie serializer for lists."""
-    poster_url = serializers.ReadOnlyField()
-    poster_url_small = serializers.ReadOnlyField()
+
+    poster_url = serializers.SerializerMethodField()
+    poster_url_small = serializers.SerializerMethodField()
     genres = GenreSerializer(many=True, read_only=True)
     year = serializers.SerializerMethodField()
 
@@ -70,9 +87,16 @@ class MovieCompactSerializer(serializers.ModelSerializer):
         model = Movie
         fields = [
             "id", "tmdb_id", "title", "overview", "release_date", "year",
-            "vote_average", "vote_count", "popularity", "poster_url",
-            "poster_url_small", "genres", "runtime",
+            "vote_average", "vote_count", "popularity",
+            "poster_url", "poster_url_small",
+            "genres", "runtime",
         ]
+
+    def get_poster_url(self, obj):
+        return TMDBImageBuilder.poster(obj.poster_path, "w500")
+
+    def get_poster_url_small(self, obj):
+        return TMDBImageBuilder.poster(obj.poster_path, "w185")
 
     def get_year(self, obj):
         return obj.release_date.year if obj.release_date else None
@@ -80,17 +104,19 @@ class MovieCompactSerializer(serializers.ModelSerializer):
 
 class MovieDetailSerializer(serializers.ModelSerializer):
     """Full movie serializer with all relationships."""
-    poster_url = serializers.ReadOnlyField()
-    backdrop_url = serializers.ReadOnlyField()
-    trailer_url = serializers.ReadOnlyField()
-    trailer_embed_url = serializers.ReadOnlyField()
+
+    poster_url = serializers.SerializerMethodField()
+    backdrop_url = serializers.SerializerMethodField()
+    trailer_url = serializers.SerializerMethodField()
+    trailer_embed_url = serializers.SerializerMethodField()
+
     genres = GenreSerializer(many=True, read_only=True)
     directors = PersonCompactSerializer(many=True, read_only=True)
+
     cast = serializers.SerializerMethodField()
     watch_providers = WatchProviderSerializer(many=True, read_only=True)
+
     year = serializers.SerializerMethodField()
-    wikipedia_url = serializers.ReadOnlyField()
-    wikipedia_summary = serializers.ReadOnlyField()
 
     class Meta:
         model = Movie
@@ -112,9 +138,24 @@ class MovieDetailSerializer(serializers.ModelSerializer):
     def get_year(self, obj):
         return obj.release_date.year if obj.release_date else None
 
+    def get_poster_url(self, obj):
+        return TMDBImageBuilder.poster(obj.poster_path, "w500")
+
+    def get_backdrop_url(self, obj):
+        return TMDBImageBuilder.backdrop(obj.backdrop_path)
+
+    def get_trailer_url(self, obj):
+        if obj.trailer_key:
+            return f"https://www.youtube.com/watch?v={obj.trailer_key}"
+        return None
+
+    def get_trailer_embed_url(self, obj):
+        if obj.trailer_key:
+            return f"https://www.youtube.com/embed/{obj.trailer_key}"
+        return None
+
 
 class TMDBMovieSerializer(serializers.Serializer):
-    """Serializer for raw TMDB API responses (not from DB)."""
     id = serializers.IntegerField()
     title = serializers.CharField()
     overview = serializers.CharField(allow_blank=True)
@@ -128,12 +169,12 @@ class TMDBMovieSerializer(serializers.Serializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        base = "https://image.tmdb.org/t/p"
-        if data.get("poster_path"):
-            data["poster_url"] = f"{base}/w500{data['poster_path']}"
-            data["poster_url_small"] = f"{base}/w185{data['poster_path']}"
-        if data.get("backdrop_path"):
-            data["backdrop_url"] = f"{base}/w1280{data['backdrop_path']}"
+
+        data["poster_url"] = TMDBImageBuilder.poster(data.get("poster_path"), "w500")
+        data["poster_url_small"] = TMDBImageBuilder.poster(data.get("poster_path"), "w185")
+        data["backdrop_url"] = TMDBImageBuilder.backdrop(data.get("backdrop_path"))
+
         rd = data.get("release_date", "")
         data["year"] = int(rd[:4]) if rd and len(rd) >= 4 else None
+
         return data
