@@ -26,8 +26,8 @@ export default function HomePage() {
         ]);
 
         if (trendRes.status === "fulfilled") setTrending(trendRes.value.results || []);
-        if (npRes.status === "fulfilled") setNowPlaying(npRes.value.results);
-        if (trRes.status === "fulfilled") setTopRated(trRes.value.results);
+        if (npRes.status === "fulfilled") setNowPlaying(npRes.value.results || []);
+        if (trRes.status === "fulfilled") setTopRated(trRes.value.results || []);
       } catch (err) {
         console.error("Failed to fetch movies:", err);
       } finally {

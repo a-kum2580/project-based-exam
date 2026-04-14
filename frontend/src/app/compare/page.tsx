@@ -211,7 +211,7 @@ export default function ComparePage() {
               </div>
             )}
 
-            {!Search && (
+            {results.length === 0 && (
               <div className="mt-6 text-center">
                 <div className="w-14 h-20 rounded-lg border-2 border-dashed border-white/10 flex items-center justify-center mx-auto mb-3">
                   <Search className="w-5 h-5 text-white/10" />

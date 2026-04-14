@@ -11,8 +11,9 @@ interface PersonalizedSectionProps {
 }
 
 export default function PersonalizedSection({ movies }: PersonalizedSectionProps) {
-  const featured = movies.slice(0, 4);
-  const secondary = movies.slice(4, 10);
+  const safeMovies = Array.isArray(movies) ? movies : [];
+  const featured = safeMovies.slice(0, 4);
+  const secondary = safeMovies.slice(4, 10);
 
   return (
     <section className="px-6 md:px-10 lg:px-20">
