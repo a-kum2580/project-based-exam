@@ -11,6 +11,12 @@ import MovieCard, { MovieCardSkeleton } from "@/components/MovieCard";
 import { moviesAPI } from "@/lib/api";
 import type { MovieCompact } from "@/types/movie";
 
+interface MoodInfo {
+  slug: string;
+  label: string;
+  description: string;
+}
+
 const MOODS = [
   { slug: "cozy-night", label: "Cozy Night In", icon: Heart, color: "from-pink-500/15 to-rose-600/15", iconColor: "text-pink-400", desc: "Warm & comforting" },
   { slug: "adrenaline", label: "Adrenaline Rush", icon: Zap, color: "from-red-500/15 to-orange-600/15", iconColor: "text-red-400", desc: "Heart-pumping action" },
@@ -24,21 +30,12 @@ const MOODS = [
   { slug: "documentary-deep-dive", label: "Documentary", icon: BookOpen, color: "from-cyan-500/15 to-sky-600/15", iconColor: "text-cyan-400", desc: "Real stories" },
 ];
 
-function MoodContent() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const activeMood = searchParams.get("mood") || "";
-
+function useMoodData(activeMood: string) {
   const [movies, setMovies] = useState<MovieCompact[]>([]);
-  const [moodInfo, setMoodInfo] = useState<any>(null);
+  const [moodInfo, setMoodInfo] = useState<MoodInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-
-  useEffect(() => {
-    if (!activeMood) return;
-    fetchMoodMovies(activeMood, 1);
-  }, [activeMood]);
 
   async function fetchMoodMovies(slug: string, p: number) {
     setLoading(true);
@@ -54,6 +51,21 @@ function MoodContent() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (!activeMood) return;
+    fetchMoodMovies(activeMood, 1);
+  }, [activeMood]);
+
+  return { movies, moodInfo, loading, page, totalPages, fetchMoodMovies };
+}
+
+function MoodContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const activeMood = searchParams.get("mood") || "";
+
+  const { movies, moodInfo, loading, page, totalPages, fetchMoodMovies } = useMoodData(activeMood);
 
   return (
     <div className="pt-24 pb-20 px-6 md:px-10 lg:px-20 max-w-[1440px] mx-auto">
