@@ -19,15 +19,15 @@ export default function HomePage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [trendRes, npRes, trRes] = await Promise.allSettled([
+        const [trendingRes, nowPlayingRes, topRatedRes] = await Promise.allSettled([
           moviesAPI.trending(),
           moviesAPI.nowPlaying(),
           moviesAPI.topRated(),
         ]);
 
-        if (trendRes.status === "fulfilled") setTrending(trendRes.value.results || []);
-        if (npRes.status === "fulfilled") setNowPlaying(npRes.value.results || []);
-        if (trRes.status === "fulfilled") setTopRated(trRes.value.results || []);
+        if (trendingRes.status === "fulfilled") setTrending(trendingRes.value.results || []);
+        if (nowPlayingRes.status === "fulfilled") setNowPlaying(nowPlayingRes.value.results || []);
+        if (topRatedRes.status === "fulfilled") setTopRated(topRatedRes.value.results || []);
       } catch (err) {
         console.error("Failed to fetch movies:", err);
       } finally {

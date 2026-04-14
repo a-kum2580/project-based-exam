@@ -76,7 +76,7 @@ export default function PersonalizedSection({ movies }: PersonalizedSectionProps
           {/* Right:stacked movie posters */}
           <div className="relative w-full lg:w-auto flex-shrink-0">
             <div className="flex gap-3 justify-center lg:justify-end">
-              {featured.map((movie, i) => {
+              {featured.map((movie, index) => {
                 const pUrl = posterUrl(
                   movie.poster_url || (movie as any).poster_path,
                   "w500"
@@ -87,8 +87,8 @@ export default function PersonalizedSection({ movies }: PersonalizedSectionProps
                     href={`/movie/${movie.tmdb_id || movie.id}`}
                     className="relative group/poster"
                     style={{
-                      transform: `rotate(${(i - 1.5) * 3}deg)`,
-                      zIndex: i === 1 || i === 2 ? 2 : 1,
+                      transform: `rotate(${(index - 1.5) * 3}deg)`,
+                      zIndex: index === 1 || index === 2 ? 2 : 1,
                     }}
                   >
                     <div className="w-[110px] md:w-[130px] h-[165px] md:h-[195px] rounded-xl overflow-hidden shadow-2xl shadow-black/50 border border-white/[0.08] transition-all duration-400 group-hover/poster:scale-105 group-hover/poster:border-gold/20 group-hover/poster:shadow-gold/10">

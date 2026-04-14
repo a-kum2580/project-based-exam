@@ -68,21 +68,21 @@ export default function HeroSection({ movies }: HeroSectionProps) {
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
-      {heroMovies.map((m, i) => {
-        const bg = backdropUrl((m as any).backdrop_url || m.poster_url);
+      {heroMovies.map((movieItem, index) => {
+        const bg = backdropUrl((movieItem as any).backdrop_url || movieItem.poster_url);
         return (
           <div
-            key={m.id || m.tmdb_id}
+            key={movieItem.id || movieItem.tmdb_id}
             className="absolute inset-0 transition-opacity duration-[1200ms] ease-in-out"
-            style={{ opacity: i === activeIndex ? 1 : 0 }}
+            style={{ opacity: index === activeIndex ? 1 : 0 }}
           >
             {bg && (
               <Image
                 src={bg}
-                alt={m.title}
+                alt={movieItem.title}
                 fill
                 className="object-cover object-top"
-                priority={i === 0}
+                priority={index === 0}
                 unoptimized
               />
             )}
@@ -126,12 +126,12 @@ export default function HeroSection({ movies }: HeroSectionProps) {
           {/* Genres */}
           {movie.genres && movie.genres.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-7">
-              {movie.genres.slice(0, 4).map((g: any) => (
+              {movie.genres.slice(0, 4).map((genre: any) => (
                 <span
-                  key={g.id || g.tmdb_id || g.name}
+                  key={genre.id || genre.tmdb_id || genre.name}
                   className="px-3 py-1 rounded-full bg-white/[0.06] border border-white/[0.08] text-[11px] font-medium text-white/60 uppercase tracking-wider"
                 >
-                  {g.name}
+                  {genre.name}
                 </span>
               ))}
             </div>
@@ -173,16 +173,16 @@ export default function HeroSection({ movies }: HeroSectionProps) {
 
       {/* Slide indicators */}
       <div className="absolute bottom-20 left-6 md:left-10 lg:left-20 z-20 flex items-center gap-2">
-        {heroMovies.map((m, i) => (
+        {heroMovies.map((movieItem, index) => (
           <button
-            key={m.id || m.tmdb_id}
-            onClick={() => goTo(i)}
+            key={movieItem.id || movieItem.tmdb_id}
+            onClick={() => goTo(index)}
             className="group relative"
           >
             <div className={`h-[3px] rounded-full transition-all duration-300 ${
-              i === activeIndex ? "w-10 bg-gold" : "w-5 bg-white/15 hover:bg-white/25"
+              index === activeIndex ? "w-10 bg-gold" : "w-5 bg-white/15 hover:bg-white/25"
             }`}>
-              {i === activeIndex && (
+              {index === activeIndex && (
                 <div
                   key={progressKey}
                   className="hero-progress-fill"
@@ -202,21 +202,21 @@ export default function HeroSection({ movies }: HeroSectionProps) {
 
       
       <div className="hidden xl:flex absolute right-10 bottom-32 z-20 gap-3">
-        {heroMovies.slice(0, 5).map((m, i) => {
-          const pUrl = posterUrl(m.poster_url || (m as any).poster_path, "w185");
+        {heroMovies.slice(0, 5).map((movieItem, index) => {
+          const pUrl = posterUrl(movieItem.poster_url || (movieItem as any).poster_path, "w185");
           return (
             <button
-              key={m.id || m.tmdb_id}
-              onClick={() => goTo(i)}
+              key={movieItem.id || movieItem.tmdb_id}
+              onClick={() => goTo(index)}
               className={`relative w-[60px] h-[90px] rounded-lg overflow-hidden transition-all duration-400 ${
-                i === activeIndex
+                index === activeIndex
                   ? "ring-2 ring-gold/60 scale-110 shadow-lg shadow-gold/10"
                   : "opacity-40 hover:opacity-70 scale-100"
               }`}
             >
               <Image
                 src={pUrl}
-                alt={m.title}
+                alt={movieItem.title}
                 fill
                 className="object-cover"
                 unoptimized

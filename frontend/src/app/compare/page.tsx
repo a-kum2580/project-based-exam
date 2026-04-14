@@ -11,6 +11,149 @@ import { moviesAPI } from "@/lib/api";
 import { posterUrl, formatRuntime, formatCurrency, ratingColor } from "@/lib/utils";
 import type { MovieCompact } from "@/types/movie";
 
+/**
+ * Reusable component for displaying comparison bars.
+ */
+interface CompareBarProps {
+  label: string;
+  valueA: number;
+  valueB: number;
+  higher: "higher" | "lower";
+}
+
+function CompareBar({ label, valueA, valueB, higher }: CompareBarProps) {
+  const max = Math.max(valueA, valueB, 1);
+  const pctA = (valueA / max) * 100;
+  const pctB = (valueB / max) * 100;
+  const aWins = higher === "higher" ? valueA > valueB : valueA < valueB;
+  const bWins = higher === "higher" ? valueB > valueA : valueB < valueA;
+
+  return (
+    <div className="py-3">
+      <p className="text-[11px] uppercase tracking-wider text-white/25 font-semibold text-center mb-2">{label}</p>
+      <div className="flex items-center gap-3">
+        <span className={`text-sm font-bold w-20 text-right font-mono ${aWins ? "text-emerald-400" : "text-white/50"}`}>
+          {typeof valueA === "number" && valueA > 1000 ? formatCurrency(valueA) : valueA || "—"}
+        </span>
+        <div className="flex-1 flex gap-1 h-4">
+          <div className="flex-1 flex justify-end">
+            <div
+              className={`h-full rounded-l transition-all duration-700 ${aWins ? "bg-emerald-500/50" : "bg-white/10"}`}
+              style={{ width: `${pctA}%` }}
+            />
+          </div>
+          <div className="flex-1">
+            <div
+              className={`h-full rounded-r transition-all duration-700 ${bWins ? "bg-emerald-500/50" : "bg-white/10"}`}
+              style={{ width: `${pctB}%` }}
+            />
+          </div>
+        </div>
+        <span className={`text-sm font-bold w-20 font-mono ${bWins ? "text-emerald-400" : "text-white/50"}`}>
+          {typeof valueB === "number" && valueB > 1000 ? formatCurrency(valueB) : valueB || "—"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Reusable component for searching and displaying a selected movie.
+ */
+interface MovieSelectorProps {
+  side: "A" | "B";
+  results: any[];
+  searching: boolean;
+  movie: any;
+  inputRef: React.RefObject<HTMLInputElement>;
+  onSearch: (query: string, side: "A" | "B") => void;
+  onSelect: (tmdbId: number, side: "A" | "B") => void;
+  onClear: () => void;
+}
+
+function MovieSelector({ side, results, searching, movie, inputRef, onSearch, onSelect, onClear }: MovieSelectorProps) {
+  return (
+    <div className="flex-1 min-w-0">
+      {movie ? (
+        <div className="text-center animate-fade-in">
+          <div className="relative inline-block">
+            <div className="w-40 h-60 rounded-xl overflow-hidden mx-auto mb-3 shadow-xl border border-white/[0.06]">
+              <Image
+                src={posterUrl(movie.poster_path)}
+                alt={movie.title}
+                fill
+                className="object-cover"
+                unoptimized
+              />
+            </div>
+            <button
+              onClick={onClear}
+              className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-surface-3 border border-white/10 flex items-center justify-center text-white/40 hover:text-white hover:bg-red-500/20 transition-colors"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+          <h3 className="text-lg font-bold font-display">{movie.title}</h3>
+          <p className="text-xs text-white/30 mt-1">
+            {movie.release_date ? new Date(movie.release_date).getFullYear() : "N/A"}
+            {movie.runtime ? ` • ${formatRuntime(movie.runtime)}` : ""}
+          </p>
+        </div>
+      ) : (
+        <div className="relative">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25" />
+            <input
+              ref={inputRef}
+              type="text"
+              onChange={(e) => onSearch(e.target.value, side)}
+              placeholder={`Search movie ${side}...`}
+              className="w-full h-12 pl-11 pr-4 rounded-xl bg-surface-2 border border-white/[0.08] text-white placeholder:text-white/20 outline-none focus:border-gold/40 transition-all text-sm font-body"
+            />
+            {searching && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gold/40 animate-spin" />}
+          </div>
+
+          {results.length > 0 && (
+            <div className="absolute top-14 left-0 right-0 glass-card rounded-xl p-1.5 z-20 shadow-xl animate-fade-in">
+              {results.map((result: any) => (
+                <button
+                  key={result.id || result.tmdb_id}
+                  onClick={() => onSelect(result.tmdb_id || result.id, side)}
+                  className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-white/5 text-left transition-colors"
+                >
+                  <div className="w-8 h-12 rounded bg-surface-3 overflow-hidden flex-shrink-0">
+                    <Image
+                      src={posterUrl(result.poster_url || result.poster_path, "w185")}
+                      alt={result.title}
+                      width={32}
+                      height={48}
+                      className="w-full h-full object-cover"
+                      unoptimized
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{result.title}</p>
+                    <p className="text-[11px] text-white/30">{result.year}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {results.length === 0 && (
+            <div className="mt-6 text-center">
+              <div className="w-14 h-20 rounded-lg border-2 border-dashed border-white/10 flex items-center justify-center mx-auto mb-3">
+                <Search className="w-5 h-5 text-white/10" />
+              </div>
+              <p className="text-xs text-white/20">Search for a movie</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ComparePage() {
   const [resultsA, setResultsA] = useState<MovieCompact[]>([]);
   const [resultsB, setResultsB] = useState<MovieCompact[]>([]);
@@ -34,22 +177,30 @@ export default function ComparePage() {
     };
   }, []);
 
+  /**
+   * Fetches movies based on query and updates the specific side.
+   */
   async function searchMovies(query: string, side: "A" | "B") {
-    side === "A" ? setSearchingA(true) : setSearchingB(true);
+    const setSearching = side === "A" ? setSearchingA : setSearchingB;
+    const setResults = side === "A" ? setResultsA : setResultsB;
+
+    setSearching(true);
     try {
       const data = await moviesAPI.search(query);
-      side === "A" ? setResultsA((data.results || []).slice(0, 5)) : setResultsB((data.results || []).slice(0, 5));
-    } catch { }
-    finally {
-      side === "A" ? setSearchingA(false) : setSearchingB(false);
+      setResults((data.results || []).slice(0, 5));
+    } catch (err) {
+      console.error(`Failed to search for side ${side}:`, err);
+    } finally {
+      setSearching(false);
     }
   }
 
   // Debounced search function
   const debouncedSearch = useCallback((query: string, side: "A" | "B") => {
+    const setResults = side === "A" ? setResultsA : setResultsB;
     // Clear results if query is too short
     if (query.length < 2) {
-      side === "A" ? setResultsA([]) : setResultsB([]);
+      setResults([]);
       return;
     }
 
@@ -66,6 +217,9 @@ export default function ComparePage() {
     }, 500);
   }, []);
 
+  /**
+   * Fetches movie details and assigns to the selected side.
+   */
   async function selectMovie(tmdbId: number, side: "A" | "B") {
     setLoading(true);
     try {
@@ -104,127 +258,6 @@ export default function ComparePage() {
     setResultsB(resultsA);
   }
 
-  function CompareBar({ label, valueA, valueB, higher }: { label: string; valueA: number; valueB: number; higher: "higher" | "lower" }) {
-    const max = Math.max(valueA, valueB, 1);
-    const pctA = (valueA / max) * 100;
-    const pctB = (valueB / max) * 100;
-    const aWins = higher === "higher" ? valueA > valueB : valueA < valueB;
-    const bWins = higher === "higher" ? valueB > valueA : valueB < valueA;
-
-    return (
-      <div className="py-3">
-        <p className="text-[11px] uppercase tracking-wider text-white/25 font-semibold text-center mb-2">{label}</p>
-        <div className="flex items-center gap-3">
-          <span className={`text-sm font-bold w-20 text-right font-mono ${aWins ? "text-emerald-400" : "text-white/50"}`}>
-            {typeof valueA === "number" && valueA > 1000 ? formatCurrency(valueA) : valueA || "—"}
-          </span>
-          <div className="flex-1 flex gap-1 h-4">
-            <div className="flex-1 flex justify-end">
-              <div
-                className={`h-full rounded-l transition-all duration-700 ${aWins ? "bg-emerald-500/50" : "bg-white/10"}`}
-                style={{ width: `${pctA}%` }}
-              />
-            </div>
-            <div className="flex-1">
-              <div
-                className={`h-full rounded-r transition-all duration-700 ${bWins ? "bg-emerald-500/50" : "bg-white/10"}`}
-                style={{ width: `${pctB}%` }}
-              />
-            </div>
-          </div>
-          <span className={`text-sm font-bold w-20 font-mono ${bWins ? "text-emerald-400" : "text-white/50"}`}>
-            {typeof valueB === "number" && valueB > 1000 ? formatCurrency(valueB) : valueB || "—"}
-          </span>
-        </div>
-      </div>
-    );
-  }
-
-  function MovieSelector({ side, results, searching, movie, clear }: any) {
-    return (
-      <div className="flex-1 min-w-0">
-        {movie ? (
-          <div className="text-center animate-fade-in">
-            <div className="relative inline-block">
-              <div className="w-40 h-60 rounded-xl overflow-hidden mx-auto mb-3 shadow-xl border border-white/[0.06]">
-                <Image
-                  src={posterUrl(movie.poster_path)}
-                  alt={movie.title}
-                  fill
-                  className="object-cover"
-                  unoptimized
-                />
-              </div>
-              <button
-                onClick={clear}
-                className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-surface-3 border border-white/10 flex items-center justify-center text-white/40 hover:text-white hover:bg-red-500/20 transition-colors"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-            <h3 className="text-lg font-bold font-display">{movie.title}</h3>
-            <p className="text-xs text-white/30 mt-1">
-              {movie.release_date ? new Date(movie.release_date).getFullYear() : "N/A"}
-              {movie.runtime ? ` • ${formatRuntime(movie.runtime)}` : ""}
-            </p>
-          </div>
-        ) : (
-          <div className="relative">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25" />
-              <input
-                ref={side === "A" ? inputRefA : inputRefB}
-                type="text"
-                onChange={(e) => {
-                  debouncedSearch(e.target.value, side);
-                }}
-                placeholder={`Search movie ${side}...`}
-                className="w-full h-12 pl-11 pr-4 rounded-xl bg-surface-2 border border-white/[0.08] text-white placeholder:text-white/20 outline-none focus:border-gold/40 transition-all text-sm font-body"
-              />
-              {searching && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gold/40 animate-spin" />}
-            </div>
-
-            {results.length > 0 && (
-              <div className="absolute top-14 left-0 right-0 glass-card rounded-xl p-1.5 z-20 shadow-xl animate-fade-in">
-                {results.map((m: any) => (
-                  <button
-                    key={m.id || m.tmdb_id}
-                    onClick={() => selectMovie(m.tmdb_id || m.id, side)}
-                    className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-white/5 text-left transition-colors"
-                  >
-                    <div className="w-8 h-12 rounded bg-surface-3 overflow-hidden flex-shrink-0">
-                      <Image
-                        src={posterUrl(m.poster_url || m.poster_path, "w185")}
-                        alt={m.title}
-                        width={32}
-                        height={48}
-                        className="w-full h-full object-cover"
-                        unoptimized
-                      />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{m.title}</p>
-                      <p className="text-[11px] text-white/30">{m.year}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {results.length === 0 && (
-              <div className="mt-6 text-center">
-                <div className="w-14 h-20 rounded-lg border-2 border-dashed border-white/10 flex items-center justify-center mx-auto mb-3">
-                  <Search className="w-5 h-5 text-white/10" />
-                </div>
-                <p className="text-xs text-white/20">Search for a movie</p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   const bothSelected = movieA && movieB;
 
   return (
@@ -250,7 +283,10 @@ export default function ComparePage() {
           results={resultsA}
           searching={searchingA}
           movie={movieA}
-          clear={() => setMovieA(null)}
+          inputRef={inputRefA}
+          onSearch={debouncedSearch}
+          onSelect={selectMovie}
+          onClear={() => setMovieA(null)}
         />
 
         <div className="flex-shrink-0 pt-8">
@@ -269,7 +305,10 @@ export default function ComparePage() {
           results={resultsB}
           searching={searchingB}
           movie={movieB}
-          clear={() => setMovieB(null)}
+          inputRef={inputRefB}
+          onSearch={debouncedSearch}
+          onSelect={selectMovie}
+          onClear={() => setMovieB(null)}
         />
       </div>
 
@@ -293,9 +332,9 @@ export default function ComparePage() {
             <div className="flex gap-6">
               <div className="flex-1 text-right">
                 <div className="flex flex-wrap gap-1.5 justify-end">
-                  {(movieA.genres || []).map((g: any) => (
-                    <span key={g.id} className="px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-[11px] text-white/50">
-                      {g.name}
+                  {(movieA.genres || []).map((genre: any) => (
+                    <span key={genre.id} className="px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-[11px] text-white/50">
+                      {genre.name}
                     </span>
                   ))}
                 </div>
@@ -303,9 +342,9 @@ export default function ComparePage() {
               <div className="flex-shrink-0 w-px bg-white/[0.06]" />
               <div className="flex-1">
                 <div className="flex flex-wrap gap-1.5">
-                  {(movieB.genres || []).map((g: any) => (
-                    <span key={g.id} className="px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-[11px] text-white/50">
-                      {g.name}
+                  {(movieB.genres || []).map((genre: any) => (
+                    <span key={genre.id} className="px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-[11px] text-white/50">
+                      {genre.name}
                     </span>
                   ))}
                 </div>
@@ -318,21 +357,21 @@ export default function ComparePage() {
             <p className="text-[11px] uppercase tracking-wider text-white/25 font-semibold text-center mb-4">Top Cast</p>
             <div className="flex gap-6">
               <div className="flex-1 space-y-1.5">
-                {(movieA.credits?.cast || []).slice(0, 5).map((c: any) => (
-                  <div key={c.id} className="flex items-center gap-2 justify-end">
+                {(movieA.credits?.cast || []).slice(0, 5).map((castMember: any) => (
+                  <div key={castMember.id} className="flex items-center gap-2 justify-end">
                     <div className="text-right">
-                      <p className="text-[12px] text-white/60">{c.name}</p>
-                      <p className="text-[10px] text-white/25">{c.character}</p>
+                      <p className="text-[12px] text-white/60">{castMember.name}</p>
+                      <p className="text-[10px] text-white/25">{castMember.character}</p>
                     </div>
                     <div className="w-7 h-7 rounded-full overflow-hidden bg-surface-3 flex-shrink-0">
-                      {c.profile_path ? (
+                      {castMember.profile_path ? (
                         <Image
-                          src={`https://image.tmdb.org/t/p/w185${c.profile_path}`}
-                          alt={c.name} width={28} height={28}
+                          src={`https://image.tmdb.org/t/p/w185${castMember.profile_path}`}
+                          alt={castMember.name} width={28} height={28}
                           className="w-full h-full object-cover" unoptimized
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[9px] text-white/15">{c.name?.[0]}</div>
+                        <div className="w-full h-full flex items-center justify-center text-[9px] text-white/15">{castMember.name?.[0]}</div>
                       )}
                     </div>
                   </div>
@@ -340,22 +379,22 @@ export default function ComparePage() {
               </div>
               <div className="flex-shrink-0 w-px bg-white/[0.06]" />
               <div className="flex-1 space-y-1.5">
-                {(movieB.credits?.cast || []).slice(0, 5).map((c: any) => (
-                  <div key={c.id} className="flex items-center gap-2">
+                {(movieB.credits?.cast || []).slice(0, 5).map((castMember: any) => (
+                  <div key={castMember.id} className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-full overflow-hidden bg-surface-3 flex-shrink-0">
-                      {c.profile_path ? (
+                      {castMember.profile_path ? (
                         <Image
-                          src={`https://image.tmdb.org/t/p/w185${c.profile_path}`}
-                          alt={c.name} width={28} height={28}
+                          src={`https://image.tmdb.org/t/p/w185${castMember.profile_path}`}
+                          alt={castMember.name} width={28} height={28}
                           className="w-full h-full object-cover" unoptimized
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[9px] text-white/15">{c.name?.[0]}</div>
+                        <div className="w-full h-full flex items-center justify-center text-[9px] text-white/15">{castMember.name?.[0]}</div>
                       )}
                     </div>
                     <div>
-                      <p className="text-[12px] text-white/60">{c.name}</p>
-                      <p className="text-[10px] text-white/25">{c.character}</p>
+                      <p className="text-[12px] text-white/60">{castMember.name}</p>
+                      <p className="text-[10px] text-white/25">{castMember.character}</p>
                     </div>
                   </div>
                 ))}
