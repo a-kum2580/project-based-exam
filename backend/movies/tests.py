@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APITestCase, APIClient
@@ -47,7 +49,7 @@ class MovieModelTest(TestCase):
     def setUp(self):
         self.movie = Movie.objects.create(
             tmdb_id=550, title="Fight Club",
-            release_date="1999-10-15", vote_average=8.4,
+            release_date=date(1999, 10, 15), vote_average=8.4,
             popularity=50.0, poster_path="/fightclub.jpg",
             backdrop_path="/fightclub_bg.jpg", trailer_key="SUXWAEX2jlg"
         )
@@ -91,7 +93,7 @@ class MovieAPITest(APITestCase):
         self.genre = Genre.objects.create(tmdb_id=28, name="Action", slug="action")
         self.movie = Movie.objects.create(
             tmdb_id=550, title="Fight Club",
-            release_date="1999-10-15", vote_average=8.4, popularity=50.0
+            release_date=date(1999, 10, 15), vote_average=8.4, popularity=50.0
         )
         self.movie.genres.add(self.genre)
 
