@@ -63,7 +63,7 @@ class RegisterAPITest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_register_duplicate_username(self):
-        User.objects.create_user(username="existing", password="testpass123")
+        User.objects.create_user(username="Existing", password="testpass123")
         data = {
             "username": "existing",
             "email": "new@example.com",
