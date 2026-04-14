@@ -13,6 +13,82 @@ interface HeroSectionProps {
 
 const SLIDE_DURATION = 3000; 
 
+interface ThumbnailNavProps {
+  movies: MovieCompact[];
+  activeIndex: number;
+  onSelect: (index: number) => void;
+}
+
+function ThumbnailNav({ movies, activeIndex, onSelect }: ThumbnailNavProps) {
+  return (
+    <div className="hidden xl:flex absolute right-10 bottom-32 z-20 gap-3">
+      {movies.slice(0, 5).map((movieItem, index) => {
+        const pUrl = posterUrl(movieItem.poster_url || (movieItem as any).poster_path, "w185");
+        return (
+          <button
+            key={movieItem.id || movieItem.tmdb_id}
+            onClick={() => onSelect(index)}
+            className={`relative w-[60px] h-[90px] rounded-lg overflow-hidden transition-all duration-400 ${
+              index === activeIndex
+                ? "ring-2 ring-gold/60 scale-110 shadow-lg shadow-gold/10"
+                : "opacity-40 hover:opacity-70 scale-100"
+            }`}
+          >
+            <Image
+              src={pUrl}
+              alt={movieItem.title}
+              fill
+              className="object-cover"
+              unoptimized
+            />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+interface SlideIndicatorsProps {
+  movies: MovieCompact[];
+  activeIndex: number;
+  progressKey: number;
+  isPaused: boolean;
+  slideDuration: number;
+  onSelect: (index: number) => void;
+}
+
+function SlideIndicators({ movies, activeIndex, progressKey, isPaused, slideDuration, onSelect }: SlideIndicatorsProps) {
+  return (
+    <div className="absolute bottom-20 left-6 md:left-10 lg:left-20 z-20 flex items-center gap-2">
+      {movies.map((movieItem, index) => (
+        <button
+          key={movieItem.id || movieItem.tmdb_id}
+          onClick={() => onSelect(index)}
+          className="group relative"
+        >
+          <div className={`h-[3px] rounded-full transition-all duration-300 ${
+            index === activeIndex ? "w-10 bg-gold" : "w-5 bg-white/15 hover:bg-white/25"
+          }`}>
+            {index === activeIndex && (
+              <div
+                key={progressKey}
+                className="hero-progress-fill"
+                style={{
+                  animationDuration: `${slideDuration}ms`,
+                  animationPlayState: isPaused ? "paused" : "running",
+                }}
+              />
+            )}
+          </div>
+        </button>
+      ))}
+      <span className="ml-3 text-[11px] text-white/20 font-mono tabular-nums">
+        {String(activeIndex + 1).padStart(2, "0")} / {String(movies.length).padStart(2, "0")}
+      </span>
+    </div>
+  );
+}
+
 export default function HeroSection({ movies }: HeroSectionProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -171,60 +247,20 @@ export default function HeroSection({ movies }: HeroSectionProps) {
         <ChevronRight className="w-5 h-5 text-white/60 group-hover:text-gold transition-colors" />
       </button>
 
-      {/* Slide indicators */}
-      <div className="absolute bottom-20 left-6 md:left-10 lg:left-20 z-20 flex items-center gap-2">
-        {heroMovies.map((movieItem, index) => (
-          <button
-            key={movieItem.id || movieItem.tmdb_id}
-            onClick={() => goTo(index)}
-            className="group relative"
-          >
-            <div className={`h-[3px] rounded-full transition-all duration-300 ${
-              index === activeIndex ? "w-10 bg-gold" : "w-5 bg-white/15 hover:bg-white/25"
-            }`}>
-              {index === activeIndex && (
-                <div
-                  key={progressKey}
-                  className="hero-progress-fill"
-                  style={{
-                    animationDuration: `${SLIDE_DURATION}ms`,
-                    animationPlayState: isPaused ? "paused" : "running",
-                  }}
-                />
-              )}
-            </div>
-          </button>
-        ))}
-        <span className="ml-3 text-[11px] text-white/20 font-mono tabular-nums">
-          {String(activeIndex + 1).padStart(2, "0")} / {String(heroMovies.length).padStart(2, "0")}
-        </span>
-      </div>
+      <SlideIndicators
+        movies={heroMovies}
+        activeIndex={activeIndex}
+        progressKey={progressKey}
+        isPaused={isPaused}
+        slideDuration={SLIDE_DURATION}
+        onSelect={goTo}
+      />
 
-      
-      <div className="hidden xl:flex absolute right-10 bottom-32 z-20 gap-3">
-        {heroMovies.slice(0, 5).map((movieItem, index) => {
-          const pUrl = posterUrl(movieItem.poster_url || (movieItem as any).poster_path, "w185");
-          return (
-            <button
-              key={movieItem.id || movieItem.tmdb_id}
-              onClick={() => goTo(index)}
-              className={`relative w-[60px] h-[90px] rounded-lg overflow-hidden transition-all duration-400 ${
-                index === activeIndex
-                  ? "ring-2 ring-gold/60 scale-110 shadow-lg shadow-gold/10"
-                  : "opacity-40 hover:opacity-70 scale-100"
-              }`}
-            >
-              <Image
-                src={pUrl}
-                alt={movieItem.title}
-                fill
-                className="object-cover"
-                unoptimized
-              />
-            </button>
-          );
-        })}
-      </div>
+      <ThumbnailNav 
+        movies={heroMovies} 
+        activeIndex={activeIndex} 
+        onSelect={goTo} 
+      />
     </div>
   );
 }
