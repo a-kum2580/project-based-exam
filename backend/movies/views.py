@@ -3,6 +3,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.exceptions import APIException
 from django_filters.rest_framework import DjangoFilterBackend
 
 from .models import Movie, Genre, Person
@@ -16,6 +17,12 @@ from .services.tmdb_service import TMDBService, MovieSyncService, WikipediaServi
 logger = logging.getLogger(__name__)
 tmdb = TMDBService()
 sync_service = MovieSyncService()
+
+
+def _ensure_tmdb_ok(data: dict):
+    """Raise a 502-style error when TMDB calls fail."""
+    if isinstance(data, dict) and data.get("_error"):
+        raise APIException(detail=data["_error"])
 
 
 def safe_int(value, default=1):
@@ -58,11 +65,6 @@ class MovieViewSet(viewsets.ReadOnlyModelViewSet):
         movie = self.get_object()
         year = movie.release_date.year if movie.release_date else None
         wiki_data = WikipediaService.get_movie_summary(movie.title, year)
-
-        if wiki_data.get("summary"):
-            movie.wikipedia_summary = wiki_data["summary"]
-            movie.wikipedia_url = wiki_data["url"]
-            movie.save(update_fields=["wikipedia_summary", "wikipedia_url"])
 
         return Response(wiki_data)
 
@@ -143,6 +145,7 @@ def search_movies(request):
         )
 
     data = tmdb.search_movies(query, page=page)
+    _ensure_tmdb_ok(data)
     results = data.get("results", [])
     serializer = TMDBMovieSerializer(results, many=True)
 
@@ -162,6 +165,7 @@ def trending_movies(request):
     page = safe_int(request.query_params.get("page", 1))
 
     data = tmdb.get_trending_movies(time_window=window, page=page)
+    _ensure_tmdb_ok(data)
     results = data.get("results", [])
     serializer = TMDBMovieSerializer(results, many=True)
 
@@ -177,6 +181,7 @@ def trending_movies(request):
 def now_playing(request):
     page = safe_int(request.query_params.get("page", 1))
     data = tmdb.get_now_playing(page=page)
+    _ensure_tmdb_ok(data)
     results = data.get("results", [])
     serializer = TMDBMovieSerializer(results, many=True)
     return Response({"results": serializer.data, "page": page})
@@ -187,6 +192,7 @@ def now_playing(request):
 def top_rated(request):
     page = safe_int(request.query_params.get("page", 1))
     data = tmdb.get_top_rated_movies(page=page)
+    _ensure_tmdb_ok(data)
     results = data.get("results", [])
     serializer = TMDBMovieSerializer(results, many=True)
     return Response({"results": serializer.data, "page": page})
@@ -205,6 +211,7 @@ def movie_detail_tmdb(request, tmdb_id):
             return Response(serializer.data)
 
     data = tmdb.get_movie_details(tmdb_id)
+    _ensure_tmdb_ok(data)
     if not data:
         return Response({"error": "Movie not found"}, status=404)
 
@@ -219,6 +226,7 @@ def search_people(request):
         return Response({"error": "Query parameter 'q' is required"}, status=400)
 
     data = tmdb.search_people(query)
+    _ensure_tmdb_ok(data)
     return Response(data)
 
 
