@@ -9,6 +9,7 @@ import type { MovieCompact } from "@/types/movie";
 interface MovieCardProps {
   movie: MovieCompact;
   size?: "sm" | "md" | "lg";
+  layout?: "grid" | "carousel";
   showOverview?: boolean;
   index?: number;
 }
@@ -16,6 +17,7 @@ interface MovieCardProps {
 export default function MovieCard({
   movie,
   size = "md",
+  layout = "grid",
   showOverview = false,
   index = 0,
 }: MovieCardProps) {
@@ -25,17 +27,24 @@ export default function MovieCard({
     size === "sm" ? "w185" : "w500"
   );
 
-  const sizeClasses = { sm: "w-[140px]", md: "w-[175px]", lg: "w-[220px]" };
-  const imgHeight = { sm: "h-[210px]", md: "h-[262px]", lg: "h-[330px]" };
+  const carouselWidth = { sm: "w-[140px]", md: "w-[175px]", lg: "w-[220px]" };
 
   return (
     <Link
       href={`/movie/${tmdbId}`}
-      className={`movie-card group flex-shrink-0 ${sizeClasses[size]}`}
+      className={cn(
+        "movie-card group",
+        layout === "carousel" ? `flex-shrink-0 ${carouselWidth[size]}` : "w-full"
+      )}
       style={{ animationDelay: `${index * 50}ms` }}
     >
       {/* Poster */}
-      <div className={`relative ${imgHeight[size]} rounded-xl overflow-hidden bg-surface-2 mb-3`}>
+      <div
+        className={cn(
+          "relative rounded-xl overflow-hidden bg-surface-2 mb-3",
+          layout === "carousel" ? (size === "sm" ? "h-[210px]" : size === "md" ? "h-[262px]" : "h-[330px]") : "aspect-[2/3]"
+        )}
+      >
         <Image
           src={imgUrl}
           alt={movie.title}
@@ -99,11 +108,10 @@ export default function MovieCard({
 
 // Skeleton 
 export function MovieCardSkeleton({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
-  const sizeClasses = { sm: "w-[140px]", md: "w-[175px]", lg: "w-[220px]" };
   const imgHeight = { sm: "h-[210px]", md: "h-[262px]", lg: "h-[330px]" };
 
   return (
-    <div className={`flex-shrink-0 ${sizeClasses[size]}`}>
+    <div className={`flex-shrink-0 ${size === "sm" ? "w-[140px]" : size === "md" ? "w-[175px]" : "w-[220px]"}`}>
       <div className={`${imgHeight[size]} skeleton rounded-xl mb-3`} />
       <div className="skeleton h-4 w-3/4 rounded mb-2" />
       <div className="skeleton h-3 w-1/2 rounded" />

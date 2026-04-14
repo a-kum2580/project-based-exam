@@ -26,6 +26,10 @@ class TMDBService:
 
     def _get(self, endpoint: str, params: Optional[dict] = None, ttl: int = CACHE_TTL_MEDIUM) -> dict:
         """Make Get request to TMDB with caching."""
+        if not self.api_key:
+            logger.error("TMDB_API_KEY is missing")
+            return {"_error": "TMDB_API_KEY is missing"}
+
         cache_key = f"tmdb:{endpoint}:{params}"
         cached = cache.get(cache_key)
         if cached:
@@ -40,7 +44,7 @@ class TMDBService:
             return data
         except requests.RequestException as e:
             logger.error(f"TMDB API error for {endpoint}: {e}")
-            return {}
+            return {"_error": f"TMDB request failed for {endpoint}"}
 
 
     def search_movies(self, query: str, page: int = 1) -> dict:
