@@ -1,10 +1,35 @@
-
 from django.db import models
 from django.conf import settings
+
+class TMDBImageService:
+    """Centralized image URL builder (avoids duplication)."""
+
+    @staticmethod
+    def build(path: str, size: str) -> str | None:
+        if path:
+            return f"{settings.TMDB_IMAGE_BASE_URL}/{size}{path}"
+        return None
+
+
+class YouTubeService:
+    """Centralized YouTube URL builder."""
+
+    @staticmethod
+    def watch_url(key: str) -> str | None:
+        if key:
+            return f"https://www.youtube.com/watch?v={key}"
+        return None
+
+    @staticmethod
+    def embed_url(key: str) -> str | None:
+        if key:
+            return f"https://www.youtube.com/embed/{key}"
+        return None
 
 
 class Genre(models.Model):
     """Movie genre synced from TMDB."""
+
     tmdb_id = models.IntegerField(unique=True, db_index=True)
     name = models.CharField(max_length=100)
     slug = models.SlugField(max_length=100, unique=True)
@@ -17,7 +42,7 @@ class Genre(models.Model):
 
 
 class Person(models.Model):
-    """Director, actor, or other crew member from TMDB."""
+    """Director, actor, or crew member."""
 
     class Role(models.TextChoices):
         DIRECTOR = "director", "Director"
@@ -42,13 +67,12 @@ class Person(models.Model):
 
     @property
     def profile_url(self):
-        if self.profile_path:
-            return f"{settings.TMDB_IMAGE_BASE_URL}/w185{self.profile_path}"
-        return None
+        return TMDBImageService.build(self.profile_path, "w185")
 
 
 class Movie(models.Model):
-    """Movie cached from TMDB with local enrichment."""
+    """Movie cached from TMDB with enrichment."""
+
     tmdb_id = models.IntegerField(unique=True, db_index=True)
     imdb_id = models.CharField(max_length=20, blank=True, default="", db_index=True)
     title = models.CharField(max_length=500)
@@ -56,7 +80,7 @@ class Movie(models.Model):
     overview = models.TextField(blank=True, default="")
     tagline = models.CharField(max_length=500, blank=True, default="")
     release_date = models.DateField(null=True, blank=True)
-    runtime = models.IntegerField(null=True, blank=True, help_text="Runtime in minutes")
+    runtime = models.IntegerField(null=True, blank=True)
     vote_average = models.FloatField(default=0)
     vote_count = models.IntegerField(default=0)
     popularity = models.FloatField(default=0)
@@ -67,26 +91,14 @@ class Movie(models.Model):
     status = models.CharField(max_length=50, blank=True, default="")
     homepage = models.URLField(max_length=500, blank=True, default="")
 
-    # Relationships
     genres = models.ManyToManyField(Genre, related_name="movies", blank=True)
-    directors = models.ManyToManyField(
-        Person, related_name="directed_movies", blank=True
-    )
-    cast = models.ManyToManyField(
-        Person, through="MovieCast", related_name="acted_movies", blank=True
-    )
+    directors = models.ManyToManyField(Person, related_name="directed_movies", blank=True)
+    cast = models.ManyToManyField(Person, through="MovieCast", related_name="acted_movies", blank=True)
 
-    # Video/trailer info
-    trailer_key = models.CharField(
-        max_length=50, blank=True, default="",
-        help_text="YouTube video key for the trailer"
-    )
-
-    # Wikipedia enrichment
+    trailer_key = models.CharField(max_length=50, blank=True, default="")
     wikipedia_url = models.URLField(max_length=500, blank=True, default="")
     wikipedia_summary = models.TextField(blank=True, default="")
 
-    # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -104,37 +116,28 @@ class Movie(models.Model):
 
     @property
     def poster_url(self):
-        if self.poster_path:
-            return f"{settings.TMDB_IMAGE_BASE_URL}/w500{self.poster_path}"
-        return None
+        return TMDBImageService.build(self.poster_path, "w500")
 
     @property
     def poster_url_small(self):
-        if self.poster_path:
-            return f"{settings.TMDB_IMAGE_BASE_URL}/w185{self.poster_path}"
-        return None
+        return TMDBImageService.build(self.poster_path, "w185")
 
     @property
     def backdrop_url(self):
-        if self.backdrop_path:
-            return f"{settings.TMDB_IMAGE_BASE_URL}/w1280{self.backdrop_path}"
-        return None
+        return TMDBImageService.build(self.backdrop_path, "w1280")
 
     @property
     def trailer_url(self):
-        if self.trailer_key:
-            return f"https://www.youtube.com/watch?v={self.trailer_key}"
-        return None
+        return YouTubeService.watch_url(self.trailer_key)
 
     @property
     def trailer_embed_url(self):
-        if self.trailer_key:
-            return f"https://www.youtube.com/embed/{self.trailer_key}"
-        return None
+        return YouTubeService.embed_url(self.trailer_key)
 
 
 class MovieCast(models.Model):
-    """Through model for Movie-Person cast relationship with character + order."""
+    """Through model for Movie-Person cast relationship."""
+
     movie = models.ForeignKey(Movie, on_delete=models.CASCADE)
     person = models.ForeignKey(Person, on_delete=models.CASCADE)
     character = models.CharField(max_length=500, blank=True, default="")
@@ -149,7 +152,7 @@ class MovieCast(models.Model):
 
 
 class WatchProvider(models.Model):
-    """Streaming/rental/purchase providers for a movie."""
+    """Streaming/rental/purchase providers."""
 
     class ProviderType(models.TextChoices):
         STREAM = "stream", "Streaming"
@@ -172,6 +175,4 @@ class WatchProvider(models.Model):
 
     @property
     def logo_url(self):
-        if self.logo_path:
-            return f"{settings.TMDB_IMAGE_BASE_URL}/w92{self.logo_path}"
-        return None
+        return TMDBImageService.build(self.logo_path, "w92")
