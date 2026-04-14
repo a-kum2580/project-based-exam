@@ -154,6 +154,73 @@ function MovieSelector({ side, results, searching, movie, inputRef, onSearch, on
   );
 }
 
+/**
+ * Displays a list of genres, aligned to the start or end.
+ */
+interface GenreListProps {
+  genres: { id: number; name: string }[];
+  justify: "start" | "end";
+}
+
+function GenreList({ genres, justify }: GenreListProps) {
+  return (
+    <div className="flex-1">
+      <div className={`flex flex-wrap gap-1.5 ${justify === "end" ? "justify-end" : "justify-start"}`}>
+        {(genres || []).map((genre) => (
+          <span key={genre.id} className="px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-[11px] text-white/50">
+            {genre.name}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Displays a single cast member's card.
+ */
+interface CastMemberCardProps {
+  member: any;
+  align: "left" | "right";
+}
+
+function CastMemberCard({ member, align }: CastMemberCardProps) {
+  const profileImage = (
+    <div className="w-7 h-7 rounded-full overflow-hidden bg-surface-3 flex-shrink-0">
+      {member.profile_path ? (
+        <Image src={`https://image.tmdb.org/t/p/w185${member.profile_path}`} alt={member.name} width={28} height={28} className="w-full h-full object-cover" unoptimized />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-[9px] text-white/15">{member.name?.[0]}</div>
+      )}
+    </div>
+  );
+
+  const memberDetails = (
+    <div className={align === "right" ? "text-right" : ""}>
+      <p className="text-[12px] text-white/60">{member.name}</p>
+      <p className="text-[10px] text-white/25">{member.character}</p>
+    </div>
+  );
+
+  return (
+    <div className={`flex items-center gap-2 ${align === "right" ? "justify-end" : ""}`}>
+      {align === "right" ? <>{memberDetails}{profileImage}</> : <>{profileImage}{memberDetails}</>}
+    </div>
+  );
+}
+
+/**
+ * Displays a list of cast members.
+ */
+interface CastListProps {
+  cast: any[];
+  align: "left" | "right";
+}
+
+function CastList({ cast, align }: CastListProps) {
+  return <div className="flex-1 space-y-1.5">{(cast || []).slice(0, 5).map((castMember) => <CastMemberCard key={castMember.id} member={castMember} align={align} />)}</div>;
+}
+
 export default function ComparePage() {
   const [resultsA, setResultsA] = useState<MovieCompact[]>([]);
   const [resultsB, setResultsB] = useState<MovieCompact[]>([]);
@@ -330,25 +397,9 @@ export default function ComparePage() {
           <div className="mt-6 pt-6 border-t border-white/[0.04]">
             <p className="text-[11px] uppercase tracking-wider text-white/25 font-semibold text-center mb-4">Genres</p>
             <div className="flex gap-6">
-              <div className="flex-1 text-right">
-                <div className="flex flex-wrap gap-1.5 justify-end">
-                  {(movieA.genres || []).map((genre: any) => (
-                    <span key={genre.id} className="px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-[11px] text-white/50">
-                      {genre.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
+              <GenreList genres={movieA.genres} justify="end" />
               <div className="flex-shrink-0 w-px bg-white/[0.06]" />
-              <div className="flex-1">
-                <div className="flex flex-wrap gap-1.5">
-                  {(movieB.genres || []).map((genre: any) => (
-                    <span key={genre.id} className="px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-[11px] text-white/50">
-                      {genre.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
+              <GenreList genres={movieB.genres} justify="start" />
             </div>
           </div>
 
@@ -356,49 +407,9 @@ export default function ComparePage() {
           <div className="mt-6 pt-6 border-t border-white/[0.04]">
             <p className="text-[11px] uppercase tracking-wider text-white/25 font-semibold text-center mb-4">Top Cast</p>
             <div className="flex gap-6">
-              <div className="flex-1 space-y-1.5">
-                {(movieA.credits?.cast || []).slice(0, 5).map((castMember: any) => (
-                  <div key={castMember.id} className="flex items-center gap-2 justify-end">
-                    <div className="text-right">
-                      <p className="text-[12px] text-white/60">{castMember.name}</p>
-                      <p className="text-[10px] text-white/25">{castMember.character}</p>
-                    </div>
-                    <div className="w-7 h-7 rounded-full overflow-hidden bg-surface-3 flex-shrink-0">
-                      {castMember.profile_path ? (
-                        <Image
-                          src={`https://image.tmdb.org/t/p/w185${castMember.profile_path}`}
-                          alt={castMember.name} width={28} height={28}
-                          className="w-full h-full object-cover" unoptimized
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[9px] text-white/15">{castMember.name?.[0]}</div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <CastList cast={movieA.credits?.cast} align="right" />
               <div className="flex-shrink-0 w-px bg-white/[0.06]" />
-              <div className="flex-1 space-y-1.5">
-                {(movieB.credits?.cast || []).slice(0, 5).map((castMember: any) => (
-                  <div key={castMember.id} className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full overflow-hidden bg-surface-3 flex-shrink-0">
-                      {castMember.profile_path ? (
-                        <Image
-                          src={`https://image.tmdb.org/t/p/w185${castMember.profile_path}`}
-                          alt={castMember.name} width={28} height={28}
-                          className="w-full h-full object-cover" unoptimized
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[9px] text-white/15">{castMember.name?.[0]}</div>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-[12px] text-white/60">{castMember.name}</p>
-                      <p className="text-[10px] text-white/25">{castMember.character}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <CastList cast={movieB.credits?.cast} align="left" />
             </div>
           </div>
         </div>
