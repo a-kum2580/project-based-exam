@@ -216,8 +216,7 @@ function SearchContent() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search movies, directors, actors..."
-            className="w-full h-14 pr-5 rounded-2xl bg-surface-2 border border-white/[0.08] text-white placeholder:text-white/25 outline-none focus:border-gold/40 focus:ring-1 focus:ring-gold/20 transition-all text-lg font-body"
-            style={{ paddingLeft: "3.25rem" }}
+            className="w-full h-14 pl-[3.25rem] pr-5 rounded-2xl bg-surface-2 border border-white/[0.08] text-white placeholder:text-white/25 outline-none focus:border-gold/40 focus:ring-1 focus:ring-gold/20 transition-all text-lg font-body"
           />
         </div>
       </form>
@@ -253,6 +252,7 @@ function SearchContent() {
               <select
                 value={filterGenre}
                 onChange={(e) => setFilterGenre(e.target.value)}
+                title="Genre"
                 className="w-full h-10 px-3 rounded-xl bg-surface-2 border border-white/[0.08] text-white text-sm outline-none focus:border-gold/30 transition-colors appearance-none cursor-pointer"
               >
                 <option value="">All Genres</option>
@@ -296,6 +296,7 @@ function SearchContent() {
                 type="range"
                 value={filterRating || "0"}
                 onChange={(e) => setFilterRating(e.target.value === "0" ? "" : e.target.value)}
+                title="Minimum rating"
                 min="0"
                 max="9"
                 step="0.5"
@@ -309,6 +310,7 @@ function SearchContent() {
               <select
                 value={filterLanguage}
                 onChange={(e) => setFilterLanguage(e.target.value)}
+                title="Language"
                 className="w-full h-10 px-3 rounded-xl bg-surface-2 border border-white/[0.08] text-white text-sm outline-none focus:border-gold/30 transition-colors appearance-none cursor-pointer"
               >
                 {LANGUAGES.map((l) => (
@@ -346,6 +348,7 @@ function SearchContent() {
               <select
                 value={filterSort}
                 onChange={(e) => setFilterSort(e.target.value)}
+                title="Sort by"
                 className="w-full h-10 px-3 rounded-xl bg-surface-2 border border-white/[0.08] text-white text-sm outline-none focus:border-gold/30 transition-colors appearance-none cursor-pointer"
               >
                 {SORT_OPTIONS.map((s) => (
