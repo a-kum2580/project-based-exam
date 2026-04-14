@@ -88,7 +88,26 @@ async function apiFetch<T>(
   }
 
   if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+    let message = `API error: ${response.status}`;
+    try {
+      const errorData = await response.json();
+      if (typeof errorData === "string") {
+        message = errorData;
+      } else if (errorData?.detail) {
+        message = errorData.detail;
+      } else if (typeof errorData === "object" && errorData !== null) {
+        const firstKey = Object.keys(errorData)[0];
+        const firstValue = errorData[firstKey];
+        if (Array.isArray(firstValue) && firstValue.length) {
+          message = String(firstValue[0]);
+        } else if (typeof firstValue === "string") {
+          message = firstValue;
+        }
+      }
+    } catch {
+      // Keep default message if response body is not JSON
+    }
+    throw new Error(message);
   }
 
   return response.json();

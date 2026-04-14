@@ -19,6 +19,11 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  function isCompleteEmail(value: string) {
+    // Require a basic complete domain part like user@gmail.com (not user@gmail)
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  }
+
   if (!open) return null;
 
   async function handleSubmit(e: React.FormEvent) {
@@ -35,6 +40,11 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
           setLoading(false);
           return;
         }
+        if (!isCompleteEmail(email.trim())) {
+          setError("Please enter a complete email address (e.g., name@gmail.com).");
+          setLoading(false);
+          return;
+        }
         await register(username, email, password);
       }
       onClose();
@@ -45,7 +55,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
       setError(
         mode === "login"
           ? "Invalid username or password"
-          : "Registration failed. Username may already exist."
+          : err?.message || "Registration failed. Please check your details and try again."
       );
     } finally {
       setLoading(false);
@@ -65,6 +75,8 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
           <div className="relative px-8 pt-8 pb-6 text-center">
             <button
               onClick={onClose}
+              title="Close"
+              aria-label="Close"
               className="absolute top-4 right-4 w-8 h-8 rounded-lg bg-white/[0.04] flex items-center justify-center text-white/30 hover:text-white/60 transition-colors"
             >
               <X className="w-4 h-4" />
