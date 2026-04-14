@@ -49,7 +49,6 @@ function SearchContent() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalResults, setTotalResults] = useState(0);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [currentSearchQuery, setCurrentSearchQuery] = useState(initialQuery);
 
   // Filter state
   const [filterGenre, setFilterGenre] = useState("");
@@ -78,14 +77,12 @@ function SearchContent() {
     setLoading(true);
     try {
       const data = await moviesAPI.search(q, p);
-      setResults(data?.results || []);
-      setTotalPages(data?.total_pages || 1);
-      setTotalResults(data?.total_results || 0);
+      setResults(data.results);
+      setTotalPages(data.total_pages || 1);
+      setTotalResults(data.total_results || 0);
       setPage(p);
-      setCurrentSearchQuery(q);
     } catch (err) {
       console.error(err);
-      setResults([]);
     } finally {
       setLoading(false);
     }
@@ -100,12 +97,11 @@ function SearchContent() {
         case "top_rated": data = await moviesAPI.topRated(p); break;
         default: data = await moviesAPI.trending("week", p);
       }
-      setResults(data?.results || []);
-      setTotalPages(data?.total_pages || 1);
+      setResults(data.results);
+      setTotalPages(data.total_pages || 1);
       setPage(p);
     } catch (err) {
       console.error(err);
-      setResults([]);
     } finally {
       setLoading(false);
     }
@@ -127,13 +123,12 @@ function SearchContent() {
       if (filterLanguage) params.language = filterLanguage;
 
       const data = await moviesAPI.discover(params);
-      setResults(data?.results || []);
-      setTotalPages(data?.total_pages || 1);
-      setTotalResults(data?.total_results || 0);
+      setResults(data.results);
+      setTotalPages(data.total_pages || 1);
+      setTotalResults(data.total_results || 0);
       setPage(p);
     } catch (err) {
       console.error(err);
-      setResults([]);
     } finally {
       setLoading(false);
     }
@@ -160,8 +155,8 @@ function SearchContent() {
   function handlePageChange(newPage: number) {
     if (hasActiveFilters || filterSort !== "popularity.desc") {
       applyFilters(newPage);
-    } else if (currentSearchQuery) {
-      performSearch(currentSearchQuery, newPage);
+    } else if (initialQuery) {
+      performSearch(initialQuery, newPage);
     } else {
       loadCategory(sortParam || "trending", newPage);
     }
