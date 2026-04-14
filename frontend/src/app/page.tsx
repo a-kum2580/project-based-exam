@@ -10,6 +10,10 @@ import MoodTeaser from "@/components/MoodTeaser";
 import { moviesAPI } from "@/lib/api";
 import type { MovieCompact } from "@/types/movie";
 
+function SectionDivider() {
+  return <div className="section-divider mx-6 md:mx-10 lg:mx-20" />;
+}
+
 export default function HomePage() {
   const [trending, setTrending] = useState<MovieCompact[]>([]);
   const [nowPlaying, setNowPlaying] = useState<MovieCompact[]>([]);
@@ -53,7 +57,7 @@ export default function HomePage() {
           href="/search?sort=trending"
         />
 
-        <div className="section-divider mx-6 md:mx-10 lg:mx-20" />
+        <SectionDivider />
 
         {/* Genre grid */}
         <section className="px-6 md:px-10 lg:px-20">
@@ -73,17 +77,17 @@ export default function HomePage() {
           <GenreGrid />
         </section>
 
-        <div className="section-divider mx-6 md:mx-10 lg:mx-20" />
+        <SectionDivider />
 
         {/* Mood picker teaser */}
         <MoodTeaser />
 
-        <div className="section-divider mx-6 md:mx-10 lg:mx-20" />
+        <SectionDivider />
 
         {/* Personalized recommendations */}
         <PersonalizedSection movies={topRated} />
 
-        <div className="section-divider mx-6 md:mx-10 lg:mx-20" />
+        <SectionDivider />
 
         {/* Now in theatres */}
         <MovieCarousel
