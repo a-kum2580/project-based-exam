@@ -39,8 +39,8 @@ class RegisterAPITest(APITestCase):
         }
         response = self.client.post("/api/users/register/", data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["username"], "Newuser")
-        self.assertTrue(User.objects.filter(username="Newuser").exists())
+        self.assertEqual(response.data["username"], "newuser")
+        self.assertTrue(User.objects.filter(username="newuser").exists())
 
     def test_register_password_mismatch(self):
         data = {
