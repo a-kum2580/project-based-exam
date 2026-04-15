@@ -71,10 +71,14 @@ def _parse_page(request, default=1, max_page=MAX_PAGE) -> int:
     return ParamParser.safe_page(request.query_params.get("page", default), default=default, max_page=max_page)
 
 
-def _build_genre_distribution(interactions_qs, limit=10) -> list[dict[str, Any]]:
+def _build_genre_distribution(interactions_qs, limit=10) -> dict[str, Any]:
     """
-    Build a top-N genre distribution based on stored interaction.genre_ids.
-    Returns: [{name, tmdb_id, count}, ...]
+    Build a top-N genre distribution based on all genres across tracked movies.
+    Each genre's count is shown relative to the total genre occurrences.
+    Returns: {
+        "genres": [{name, tmdb_id, count, percentage}, ...],
+        "total_genres": total_count
+    }
     """
     from movies.models import Genre
 
@@ -83,11 +87,23 @@ def _build_genre_distribution(interactions_qs, limit=10) -> list[dict[str, Any]]
         for gid in interaction.genre_ids:
             genre_counter[gid] += 1
 
+    total_genres = sum(genre_counter.values())
+    
+    if total_genres == 0:
+        return {"genres": [], "total_genres": 0}
+
     genre_name_map = {g.tmdb_id: g.name for g in Genre.objects.all()}
-    return [
-        {"name": _resolve_genre_name(gid, genre_name_map), "tmdb_id": gid, "count": count}
+    genres = [
+        {
+            "name": _resolve_genre_name(gid, genre_name_map),
+            "tmdb_id": gid,
+            "count": count,
+            "percentage": round((count / total_genres) * 100, 1),
+        }
         for gid, count in genre_counter.most_common(limit)
     ]
+    
+    return {"genres": genres, "total_genres": total_genres}
 
 
 def _build_activity_timeline(interactions_qs, days=30) -> list[dict[str, Any]]:

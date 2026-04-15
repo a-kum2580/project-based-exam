@@ -249,7 +249,7 @@ class DashboardAPITest(APITestCase):
         response = self.client.get("/api/recommendations/dashboard/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        genre_names = {item["name"] for item in response.data["genre_distribution"]}
+        genre_names = {item["name"] for item in response.data["genre_distribution"]["genres"]}
         pref_names = {item["name"] for item in response.data["preference_scores"]}
 
         self.assertIn("Drama", genre_names)

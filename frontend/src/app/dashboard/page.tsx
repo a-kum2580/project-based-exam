@@ -76,7 +76,9 @@ export default function DashboardPage() {
   }
 
   const summary = stats?.summary || {};
-  const genreDist = stats?.genre_distribution || [];
+  const genreDistData = stats?.genre_distribution || { genres: [], total_genres: 0 };
+  const genreDist = genreDistData.genres || [];
+  const totalGenreCount = genreDistData.total_genres || 0;
   const prefScores = stats?.preference_scores || [];
   const timeline = stats?.activity_timeline || [];
   const recent = stats?.recent_activity || [];
@@ -228,6 +230,11 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2 mb-5">
             <Film className="w-4 h-4 text-gold" />
             <h2 className="text-lg font-bold font-display">Genre Distribution</h2>
+            {totalGenreCount > 0 && (
+              <span className="text-xs text-white/30 ml-auto">
+                {totalGenreCount} total genres
+              </span>
+            )}
           </div>
           {genreDist.length > 0 ? (
             <div className="space-y-3">
@@ -242,7 +249,7 @@ export default function DashboardPage() {
                       style={{ width: `${(genre.count / maxGenreCount) * 100}%` }}
                     />
                   </div>
-                  <span className="text-[12px] text-white/30 w-8 font-mono">{genre.count}</span>
+                  <span className="text-[12px] text-white/30 w-12 font-mono text-right">{genre.count} ({genre.percentage}%)</span>
                 </div>
               ))}
             </div>
