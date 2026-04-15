@@ -234,6 +234,15 @@ export const recommendationsAPI = {
       body: JSON.stringify(data),
     }),
 
+  untrackInteraction: (data: {
+    movie_tmdb_id: number;
+    interaction_type: string;
+  }) =>
+    apiFetch<{ deleted: number }>("/recommendations/untrack/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
   getWatchlist: () => apiFetch<WatchlistItem[]>("/recommendations/watchlist/"),
 
   addToWatchlist: (data: {

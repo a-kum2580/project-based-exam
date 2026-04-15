@@ -160,6 +160,37 @@ def track_interaction(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def untrack_interaction(request):
+    """
+    POST /api/recommendations/untrack/
+    Body: { movie_tmdb_id, interaction_type }
+    Deletes matching interactions for the current user.
+    """
+    movie_tmdb_id = request.data.get("movie_tmdb_id")
+    interaction_type = request.data.get("interaction_type")
+
+    if movie_tmdb_id is None or not interaction_type:
+        return Response(
+            {"detail": "movie_tmdb_id and interaction_type are required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        movie_tmdb_id = int(movie_tmdb_id)
+    except (TypeError, ValueError):
+        return Response({"detail": "movie_tmdb_id must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+
+    deleted_count, _ = UserMovieInteraction.objects.filter(
+        user=request.user,
+        movie_tmdb_id=movie_tmdb_id,
+        interaction_type=interaction_type,
+    ).delete()
+
+    return Response({"deleted": deleted_count}, status=status.HTTP_200_OK)
+
+
 class WatchlistViewSet(viewsets.ModelViewSet):
     """User's watchlist CRUD."""
     serializer_class = WatchlistSerializer

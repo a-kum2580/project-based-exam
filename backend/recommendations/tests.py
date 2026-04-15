@@ -85,6 +85,36 @@ class TrackInteractionAPITest(APITestCase):
         response = self.client.post("/api/recommendations/track/", data, format="json")
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_untrack_interaction_removes_existing_row(self):
+        UserMovieInteraction.objects.create(
+            user=self.user,
+            movie_tmdb_id=550,
+            movie_title="Fight Club",
+            interaction_type="like",
+            genre_ids=[28],
+        )
+
+        response = self.client.post(
+            "/api/recommendations/untrack/",
+            {"movie_tmdb_id": 550, "interaction_type": "like"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["deleted"], 1)
+        self.assertEqual(
+            UserMovieInteraction.objects.filter(
+                user=self.user,
+                movie_tmdb_id=550,
+                interaction_type="like",
+            ).count(),
+            0,
+        )
+
+    def test_untrack_requires_movie_and_type(self):
+        response = self.client.post("/api/recommendations/untrack/", {"movie_tmdb_id": 550}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
 
 class WatchlistAPITest(APITestCase):
     """Tests for watchlist CRUD endpoints."""

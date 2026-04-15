@@ -11,7 +11,8 @@ import {
 } from "lucide-react";
 import MovieCarousel from "@/components/MovieCarousel";
 import MovieCard from "@/components/MovieCard";
-import { moviesAPI } from "@/lib/api";
+import { moviesAPI, recommendationsAPI } from "@/lib/api";
+import { useAuth } from "@/lib/AuthContext";
 import {
   posterUrl, backdropUrl, formatRuntime, formatCurrency,
   formatDate, ratingColor,
@@ -49,6 +50,7 @@ function saveWatchlist(movies: any[]) {
 export default function MovieDetailPage() {
   const params = useParams();
   const tmdbId = Number(params.id);
+  const { isAuthenticated } = useAuth();
 
   const [movie, setMovie] = useState<any>(null);
   const [recommendations, setRecommendations] = useState<MovieCompact[]>([]);
@@ -124,7 +126,7 @@ export default function MovieDetailPage() {
   }
 
   // Like / Dislike / Bookmark handlers
-  const handleLike = useCallback(() => {
+  const handleLike = useCallback(async () => {
     const liked = getLikedMovies();
     const filtered = liked.filter((m: any) => m.id !== tmdbId);
 
@@ -133,6 +135,16 @@ export default function MovieDetailPage() {
       saveLikedMovies(filtered);
       setIsLiked(false);
       setLikeCount((c) => c - 1);
+      if (isAuthenticated) {
+        try {
+          await recommendationsAPI.untrackInteraction({
+            movie_tmdb_id: tmdbId,
+            interaction_type: "like",
+          });
+        } catch (err) {
+          console.error("Failed to remove like interaction:", err);
+        }
+      }
     } else {
       // Like
       filtered.push({
@@ -147,16 +159,43 @@ export default function MovieDetailPage() {
       setIsLiked(true);
       setIsDisliked(false);
       setLikeCount((c) => c + 1);
+      if (isAuthenticated && movie) {
+        const genreIds = (movie.genres || []).map((g: any) => g.tmdb_id ?? g.id).filter(Boolean);
+        try {
+          await recommendationsAPI.untrackInteraction({
+            movie_tmdb_id: tmdbId,
+            interaction_type: "dislike",
+          });
+          await recommendationsAPI.trackInteraction({
+            movie_tmdb_id: tmdbId,
+            movie_title: movie.title || "",
+            interaction_type: "like",
+            genre_ids: genreIds,
+          });
+        } catch (err) {
+          console.error("Failed to persist like interaction:", err);
+        }
+      }
     }
-  }, [tmdbId, isLiked, movie]);
+  }, [tmdbId, isLiked, movie, isAuthenticated]);
 
-  const handleDislike = useCallback(() => {
+  const handleDislike = useCallback(async () => {
     const liked = getLikedMovies();
     const filtered = liked.filter((m: any) => m.id !== tmdbId);
 
     if (isDisliked) {
       saveLikedMovies(filtered);
       setIsDisliked(false);
+      if (isAuthenticated) {
+        try {
+          await recommendationsAPI.untrackInteraction({
+            movie_tmdb_id: tmdbId,
+            interaction_type: "dislike",
+          });
+        } catch (err) {
+          console.error("Failed to remove dislike interaction:", err);
+        }
+      }
     } else {
       filtered.push({
         id: tmdbId,
@@ -169,8 +208,25 @@ export default function MovieDetailPage() {
       saveLikedMovies(filtered);
       setIsDisliked(true);
       setIsLiked(false);
+      if (isAuthenticated && movie) {
+        const genreIds = (movie.genres || []).map((g: any) => g.tmdb_id ?? g.id).filter(Boolean);
+        try {
+          await recommendationsAPI.untrackInteraction({
+            movie_tmdb_id: tmdbId,
+            interaction_type: "like",
+          });
+          await recommendationsAPI.trackInteraction({
+            movie_tmdb_id: tmdbId,
+            movie_title: movie.title || "",
+            interaction_type: "dislike",
+            genre_ids: genreIds,
+          });
+        } catch (err) {
+          console.error("Failed to persist dislike interaction:", err);
+        }
+      }
     }
-  }, [tmdbId, isDisliked, movie]);
+  }, [tmdbId, isDisliked, movie, isAuthenticated]);
 
   const handleBookmark = useCallback(() => {
     const watchlist = getWatchlist();
