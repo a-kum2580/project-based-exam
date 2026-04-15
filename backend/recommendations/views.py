@@ -118,6 +118,79 @@ def _build_recent_activity(interactions):
     ).data
 
 
+def _build_liked_movies(interactions_qs, limit=30) -> list[dict[str, Any]]:
+    """Return latest unique liked movies for dashboard display."""
+    liked_rows = interactions_qs.filter(interaction_type="like").order_by("-created_at")
+    seen_tmdb_ids = set()
+    liked_movies = []
+
+    for row in liked_rows:
+        if row.movie_tmdb_id in seen_tmdb_ids:
+            continue
+        seen_tmdb_ids.add(row.movie_tmdb_id)
+        liked_movies.append({
+            "movie_tmdb_id": row.movie_tmdb_id,
+            "movie_title": row.movie_title,
+            "liked_at": row.created_at,
+        })
+        if len(liked_movies) >= limit:
+            break
+
+    return liked_movies
+
+
+def _build_disliked_movies(interactions_qs, limit=30) -> list[dict[str, Any]]:
+    """Return latest unique disliked movies for dashboard display."""
+    disliked_rows = interactions_qs.filter(interaction_type="dislike").order_by("-created_at")
+    seen_tmdb_ids = set()
+    disliked_movies = []
+
+    for row in disliked_rows:
+        if row.movie_tmdb_id in seen_tmdb_ids:
+            continue
+        seen_tmdb_ids.add(row.movie_tmdb_id)
+        disliked_movies.append({
+            "movie_tmdb_id": row.movie_tmdb_id,
+            "movie_title": row.movie_title,
+            "disliked_at": row.created_at,
+        })
+        if len(disliked_movies) >= limit:
+            break
+
+    return disliked_movies
+
+
+def _build_watched_movies(interactions_qs, limit=30) -> list[dict[str, Any]]:
+    """Return recent watched events (like/dislike/watched) for dashboard display."""
+    watched_rows = interactions_qs.filter(
+        interaction_type__in=["like", "dislike", "watched"]
+    ).order_by("-created_at")[:limit]
+
+    return [
+        {
+            "movie_tmdb_id": row.movie_tmdb_id,
+            "movie_title": row.movie_title,
+            "watched_at": row.created_at,
+            "source_interaction": row.interaction_type,
+        }
+        for row in watched_rows
+    ]
+
+
+def _build_watchlist_movies(watchlist_qs, limit=30) -> list[dict[str, Any]]:
+    """Return latest watchlist entries for dashboard display."""
+    rows = watchlist_qs.order_by("-added_at")[:limit]
+    return [
+        {
+            "movie_tmdb_id": row.movie_tmdb_id,
+            "movie_title": row.movie_title,
+            "added_at": row.added_at,
+            "watched": row.watched,
+        }
+        for row in rows
+    ]
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def personalized_recommendations(request):
@@ -244,4 +317,8 @@ def dashboard_stats(request):
         "preference_scores": _build_preference_scores(user, engine),
         "activity_timeline": _build_activity_timeline(interactions),
         "recent_activity": _build_recent_activity(interactions),
+        "liked_movies": _build_liked_movies(interactions),
+        "disliked_movies": _build_disliked_movies(interactions),
+        "watched_movies": _build_watched_movies(interactions),
+        "watchlist_movies": _build_watchlist_movies(watchlist),
     })

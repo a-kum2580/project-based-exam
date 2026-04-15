@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   BarChart3, Heart, ThumbsDown, Eye, Bookmark, Star,
@@ -13,6 +13,8 @@ export default function DashboardPage() {
   const { user, isAuthenticated, loading: authLoading } = useAuth();
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [showLikedList, setShowLikedList] = useState(false);
+  const likedListRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -78,15 +80,24 @@ export default function DashboardPage() {
   const prefScores = stats?.preference_scores || [];
   const timeline = stats?.activity_timeline || [];
   const recent = stats?.recent_activity || [];
+  const likedMovies = stats?.liked_movies || [];
   const maxGenreCount = Math.max(...genreDist.map((g: any) => g.count), 1);
   const maxPrefWeight = Math.max(...prefScores.map((p: any) => p.weight), 1);
 
   const statCards = [
-    { label: "Liked", value: summary.likes || 0, icon: Heart, color: "text-emerald-400", bg: "from-emerald-500/10 to-emerald-600/5" },
+    { key: "liked", label: "Liked", value: summary.likes || 0, icon: Heart, color: "text-emerald-400", bg: "from-emerald-500/10 to-emerald-600/5" },
     { label: "Disliked", value: summary.dislikes || 0, icon: ThumbsDown, color: "text-red-400", bg: "from-red-500/10 to-red-600/5" },
     { label: "Watched", value: summary.watched || 0, icon: Eye, color: "text-blue-400", bg: "from-blue-500/10 to-blue-600/5" },
     { label: "Watchlist", value: summary.watchlist_total || 0, icon: Bookmark, color: "text-gold", bg: "from-gold/10 to-amber-600/5" },
   ];
+
+  function handleStatCardClick(cardKey?: string) {
+    if (cardKey !== "liked") return;
+    setShowLikedList(true);
+    requestAnimationFrame(() => {
+      likedListRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
 
   return (
     <div className="pt-24 pb-20 px-6 md:px-10 lg:px-20 max-w-[1440px] mx-auto">
@@ -107,17 +118,76 @@ export default function DashboardPage() {
 
       {/* Statistics cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-        {statCards.map(({ label, value, icon: Icon, color, bg }) => (
-          <div key={label} className="glass-card rounded-xl p-5 relative overflow-hidden">
+        {statCards.map(({ key, label, value, icon: Icon, color, bg }) => (
+          <div
+            key={label}
+            className={`glass-card rounded-xl p-5 relative overflow-hidden ${
+              key === "liked" ? "cursor-pointer hover:border-emerald-500/30 transition-colors" : ""
+            }`}
+            onClick={() => handleStatCardClick(key)}
+            {...(key === "liked"
+              ? {
+                  role: "button",
+                  tabIndex: 0,
+                  onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleStatCardClick(key);
+                    }
+                  },
+                  title: "Click to view liked movies",
+                }
+              : {})}
+          >
             <div className={`absolute inset-0 bg-gradient-to-br ${bg}`} />
             <div className="relative z-10">
               <Icon className={`w-5 h-5 ${color} mb-3`} />
               <p className="text-3xl font-bold font-display">{value}</p>
               <p className="text-[11px] text-white/30 uppercase tracking-wider mt-1">{label}</p>
+              {key === "liked" && (
+                <p className="text-[10px] text-emerald-300/60 mt-1">View list</p>
+              )}
             </div>
           </div>
         ))}
       </div>
+
+      {showLikedList && (
+        <div ref={likedListRef} className="glass-card rounded-xl p-6 mb-10">
+          <div className="flex items-center justify-between gap-4 mb-5">
+            <div className="flex items-center gap-2">
+              <Heart className="w-4 h-4 text-emerald-400" />
+              <h2 className="text-lg font-bold font-display">Liked Movies</h2>
+            </div>
+            {likedMovies.length > 0 && (
+              <button
+                onClick={() => setShowLikedList(false)}
+                className="text-xs px-3 py-1.5 rounded-lg bg-gradient-to-r from-gold to-gold-dim text-surface-0 font-semibold hover:shadow-md hover:shadow-gold/20 transition-all"
+              >
+                Hide
+              </button>
+            )}
+          </div>
+          {likedMovies.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {likedMovies.map((item: any) => (
+                <Link
+                  key={item.movie_tmdb_id}
+                  href={`/movie/${item.movie_tmdb_id}`}
+                  className="flex items-center justify-between p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:border-emerald-500/30 transition-colors"
+                >
+                  <span className="text-sm text-white/80 truncate pr-3">{item.movie_title || `Movie #${item.movie_tmdb_id}`}</span>
+                  <span className="text-[11px] text-white/25 flex-shrink-0">
+                    {new Date(item.liked_at).toLocaleDateString()}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-white/30">You have not liked any movies yet.</p>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
         {/* Genre distribution */}

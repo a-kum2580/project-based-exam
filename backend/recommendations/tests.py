@@ -186,6 +186,23 @@ class DashboardAPITest(APITestCase):
         self.assertEqual(response.data["summary"]["likes"], 1)
         self.assertEqual(response.data["summary"]["dislikes"], 1)
         self.assertEqual(response.data["summary"]["watched"], 2)
+        self.assertEqual(len(response.data["liked_movies"]), 1)
+        self.assertEqual(response.data["liked_movies"][0]["movie_tmdb_id"], 550)
+        self.assertEqual(len(response.data["disliked_movies"]), 1)
+        self.assertEqual(response.data["disliked_movies"][0]["movie_tmdb_id"], 551)
+
+    def test_dashboard_returns_watchlist_movies(self):
+        Watchlist.objects.create(
+            user=self.user,
+            movie_tmdb_id=777,
+            movie_title="Watchlist Movie",
+            watched=False,
+        )
+
+        response = self.client.get("/api/recommendations/dashboard/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["watchlist_movies"]), 1)
+        self.assertEqual(response.data["watchlist_movies"][0]["movie_tmdb_id"], 777)
 
     def test_dashboard_watched_includes_explicit_watched_interactions(self):
         UserMovieInteraction.objects.create(
@@ -204,6 +221,21 @@ class DashboardAPITest(APITestCase):
         response = self.client.get("/api/recommendations/dashboard/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["summary"]["watched"], 3)
+        self.assertEqual(len(response.data["watched_movies"]), 3)
+
+    def test_dashboard_liked_movies_are_unique_by_movie(self):
+        UserMovieInteraction.objects.create(
+            user=self.user, movie_tmdb_id=900, movie_title="Movie X",
+            interaction_type="like", genre_ids=[18]
+        )
+        UserMovieInteraction.objects.create(
+            user=self.user, movie_tmdb_id=900, movie_title="Movie X",
+            interaction_type="like", genre_ids=[18]
+        )
+
+        response = self.client.get("/api/recommendations/dashboard/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["liked_movies"]), 1)
 
 
 class BecauseYouWatchedAPITest(APITestCase):
