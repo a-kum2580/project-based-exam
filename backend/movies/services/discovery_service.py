@@ -7,11 +7,21 @@ from rest_framework.exceptions import APIException
 class MovieDiscoveryService:
     """Encapsulates advanced movie discovery/filtering logic."""
 
-    def __init__(self, tmdb_client, cache_backend=cache, cache_ttl: int = 300, max_scan_pages: int = 500):
+    def __init__(
+        self,
+        tmdb_client,
+        cache_backend=cache,
+        cache_ttl: int = 300,
+        max_scan_pages: int = 500,
+        result_buffer_multiplier: float = 2.0,
+        max_consecutive_empty_pages: int = 3,
+    ):
         self.tmdb = tmdb_client
         self.cache = cache_backend
         self.cache_ttl = cache_ttl
         self.max_scan_pages = max_scan_pages
+        self.result_buffer_multiplier = result_buffer_multiplier
+        self.max_consecutive_empty_pages = max_consecutive_empty_pages
 
     @staticmethod
     def _safe_int(value: Any, default: int | None = 1) -> int | None:
@@ -85,16 +95,38 @@ class MovieDiscoveryService:
             total_search_pages = self._safe_int(first_page_data.get("total_pages", 1), default=1) or 1
             max_scan_pages = min(total_search_pages, self.max_scan_pages)
 
-            all_results = list(first_page_data.get("results", []))
+            first_page_results = list(first_page_data.get("results", []))
+            page_size = len(first_page_results) or 20
+            target_results = self._target_result_count(
+                requested_page=filters["page"],
+                page_size=page_size,
+            )
+
+            filtered = self._apply_search_filters(first_page_results, filters)
+            empty_pages = 0 if filtered else 1
+
             for scan_page in range(2, max_scan_pages + 1):
+                if self._should_stop_scan(
+                    current_count=len(filtered),
+                    target_count=target_results,
+                    empty_pages=empty_pages,
+                ):
+                    break
+
                 page_data = self.tmdb.search_movies(filters["q"], page=scan_page)
                 self._ensure_tmdb_ok(page_data)
-                all_results.extend(page_data.get("results", []))
+                page_results = page_data.get("results", [])
+                if not page_results:
+                    break
 
-            filtered = self._apply_search_filters(all_results, filters)
+                newly_filtered = self._apply_search_filters(page_results, filters)
+                filtered.extend(newly_filtered)
+                if newly_filtered:
+                    empty_pages = 0
+                else:
+                    empty_pages += 1
+
             self._sort_movies(filtered, filters["sort"])
-
-            page_size = len(first_page_data.get("results", [])) or 20
             self.cache.set(
                 cache_key,
                 {"results": filtered, "page_size": page_size},
@@ -149,6 +181,18 @@ class MovieDiscoveryService:
             "total_results": data.get("total_results", 0),
             "page": filters["page"],
         }
+
+    def _target_result_count(self, requested_page: int, page_size: int) -> int:
+        base_needed = max(1, requested_page) * max(1, page_size)
+        buffered = int(base_needed * self.result_buffer_multiplier)
+        return max(base_needed, buffered)
+
+    def _should_stop_scan(self, current_count: int, target_count: int, empty_pages: int) -> bool:
+        if current_count >= target_count:
+            return True
+        if empty_pages >= self.max_consecutive_empty_pages:
+            return True
+        return False
 
     def _apply_search_filters(self, all_results: list[dict], filters: dict) -> list[dict]:
         needs_runtime = filters["runtime_min"] is not None or filters["runtime_max"] is not None

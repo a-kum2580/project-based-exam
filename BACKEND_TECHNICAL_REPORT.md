@@ -71,6 +71,7 @@
 - **Automated tests**
   - `python manage.py test users` → PASS
   - `python manage.py test users recommendations movies` → PASS (49 tests)
+  - `python manage.py test movies` after adaptive scan refactor → PASS (23 tests)
   - Note: warnings like “Unauthorized”/“Bad Request” appear during tests because negative test cases intentionally validate 401/400 responses.
 
 ### f) Remaining Limitations (known risks / technical debt)
@@ -146,10 +147,39 @@
       - **Easier extension**: adding new filters now involves extending parser + filter method rather than editing one very long function.
 
 2. **Linear Scan of 500 TMDB Pages**
-   - **Location**: `backend/movies/views.py:390-410`
+   - **Location**: `backend/movies/services/discovery_service.py` (`_discover_with_query`)
    - **Issue**: `discover_filtered` scans up to 500 pages sequentially for search results (~10,000 movies).
    - **Impact**: Response time could exceed 30+ seconds; API throttling/rate limit risks.
-   - **Fix Strategy**: Implement pagination cap (max 5 pages); use filters server-side to reduce result set upfront.
+   - **Alternative Solution Implemented**: Adaptive early-stop scanning (not fixed hard cap).
+
+   **What changed in code**
+   - Added adaptive controls in `MovieDiscoveryService.__init__`:
+     - `result_buffer_multiplier` (default `2.0`)
+     - `max_consecutive_empty_pages` (default `3`)
+   - Reworked `_discover_with_query` to stop scanning when either condition is met:
+     1. enough filtered results collected for requested page (with buffer), or
+     2. too many consecutive pages produce no filtered matches.
+   - Added helper methods:
+     - `_target_result_count(requested_page, page_size)`
+     - `_should_stop_scan(current_count, target_count, empty_pages)`
+
+   **Function division for this solution**
+   - `_target_result_count`: computes dynamic target based on requested page and page size.
+   - `_should_stop_scan`: centralizes stop decisions (target reached / empty-page threshold).
+   - `_apply_search_filters`: still owns filtering logic but now works page-by-page.
+   - `_sort_movies`: applied after adaptive accumulation to preserve output ordering contract.
+
+   **Why this is better than a fixed 5-page cap**
+   - Avoids truncating relevant results just because they are beyond an arbitrary page number.
+   - Stops earlier when enough quality matches are already found.
+   - Limits wasted calls when pages stop yielding usable results.
+   - Maintains latency control while improving recall quality versus strict caps.
+
+   **Verification**
+   - Added targeted tests in `backend/movies/tests.py`:
+     - `test_scan_stops_when_target_results_reached`
+     - `test_scan_stops_after_consecutive_empty_filtered_pages`
+   - `python manage.py test movies` passes with these cases included.
 
 3. **GET Endpoint That Mutates Database**
    - **Location**: `backend/movies/views.py:122-135` (`PersonViewSet.enrich`)
@@ -345,4 +375,5 @@
   - `.env.example` aligned to actual variables; dev CORS origins updated for ports 3000/3001.
 - **Refactor**
   - `dashboard_stats` refactored into helpers for maintainability.
+  - `discover_filtered` moved to `MovieDiscoveryService`, with adaptive early-stop scan to replace full linear scan behavior.
 

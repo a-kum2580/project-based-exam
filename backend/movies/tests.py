@@ -6,6 +6,7 @@ from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 from unittest.mock import patch, MagicMock
 
+from movies.services.discovery_service import MovieDiscoveryService
 from movies.services.tmdb_service import TMDBService, MovieSyncService, WikipediaService
 
 from .models import Genre, Person, Movie, MovieCast, WatchProvider
@@ -260,6 +261,83 @@ class DiscoverFilteredAPITest(APITestCase):
         self.assertEqual(call_kwargs["primary_release_date.lte"], "2023-12-31")
         self.assertEqual(call_kwargs["vote_average.gte"], 7.0)
         self.assertEqual(call_kwargs["sort_by"], "vote_average.desc")
+
+
+class MovieDiscoveryServiceAdaptiveScanTest(TestCase):
+    """Tests adaptive early-stop logic for query-based discovery scans."""
+
+    def _movie(self, tmdb_id: int, genre_ids=None):
+        return {
+            "id": tmdb_id,
+            "title": f"Movie {tmdb_id}",
+            "overview": "",
+            "release_date": "2020-01-01",
+            "vote_average": 7.5,
+            "vote_count": 100,
+            "popularity": 50.0,
+            "poster_path": "/x.jpg",
+            "backdrop_path": None,
+            "genre_ids": genre_ids or [28],
+            "original_language": "en",
+        }
+
+    def _filters(self):
+        return {
+            "page": 1,
+            "q": "batman",
+            "genre": "28",
+            "year_from": None,
+            "year_to": None,
+            "rating_min": None,
+            "runtime_min": None,
+            "runtime_max": None,
+            "language": None,
+            "sort": "popularity.desc",
+        }
+
+    def test_scan_stops_when_target_results_reached(self):
+        tmdb = MagicMock()
+        page_1_results = [self._movie(i) for i in range(1, 21)]
+        tmdb.search_movies.return_value = {
+            "results": page_1_results,
+            "total_pages": 500,
+        }
+
+        cache_backend = MagicMock()
+        cache_backend.get.return_value = None
+        service = MovieDiscoveryService(
+            tmdb_client=tmdb,
+            cache_backend=cache_backend,
+            result_buffer_multiplier=1.0,
+            max_consecutive_empty_pages=3,
+        )
+
+        data = service.discover(self._filters())
+
+        self.assertEqual(tmdb.search_movies.call_count, 1)
+        self.assertEqual(data["total_results"], 20)
+
+    def test_scan_stops_after_consecutive_empty_filtered_pages(self):
+        tmdb = MagicMock()
+        tmdb.search_movies.side_effect = [
+            {"results": [self._movie(1, genre_ids=[35])], "total_pages": 500},
+            {"results": [self._movie(2, genre_ids=[35])], "total_pages": 500},
+            {"results": [self._movie(3, genre_ids=[35])], "total_pages": 500},
+        ]
+
+        cache_backend = MagicMock()
+        cache_backend.get.return_value = None
+        service = MovieDiscoveryService(
+            tmdb_client=tmdb,
+            cache_backend=cache_backend,
+            result_buffer_multiplier=10.0,
+            max_consecutive_empty_pages=3,
+        )
+
+        data = service.discover(self._filters())
+
+        self.assertEqual(tmdb.search_movies.call_count, 3)
+        self.assertEqual(data["total_results"], 0)
 
 class TrendingMoviesAPITest(APITestCase):
     """Test the /api/movies/trending/ endpoint."""
