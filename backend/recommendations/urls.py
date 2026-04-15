@@ -10,6 +10,7 @@ urlpatterns = [
     path("because-you-watched/", views.because_you_watched, name="because-you-watched"),
     path("preferences/", views.genre_preferences, name="genre-preferences"),
     path("track/", views.track_interaction, name="track-interaction"),
+    path("untrack/", views.untrack_interaction, name="untrack-interaction"),
     path("dashboard/", views.dashboard_stats, name="dashboard-stats"),
     path("", include(router.urls)),
 ]

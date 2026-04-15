@@ -73,6 +73,17 @@ class RegisterAPITest(APITestCase):
         response = self.client.post("/api/users/register/", data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_register_rejects_whitespace_only_symbol_password(self):
+        data = {
+            "username": "whitespaceuser",
+            "email": "white@example.com",
+            "password": "Strongpass123 ",
+            "password_confirm": "Strongpass123 ",
+        }
+        response = self.client.post("/api/users/register/", data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("password", response.data)
+
 
 class ProfileAPITest(APITestCase):
     """Tests for user profile endpoint."""
@@ -114,6 +125,15 @@ class JWTAuthTest(APITestCase):
         response = self.client.post(
             "/api/auth/token/",
             {"username": "testuser", "password": "testpass123"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+        self.assertIn("refresh", response.data)
+
+    def test_obtain_token_is_case_insensitive(self):
+        response = self.client.post(
+            "/api/auth/token/",
+            {"username": "TESTUSER", "password": "testpass123"},
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("access", response.data)

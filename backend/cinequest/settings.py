@@ -33,6 +33,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "cinequest.middleware.RequestIdMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -100,6 +101,18 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {"anon": "100/hour", "user": "1000/hour"},
 }
 
+PAGINATION_LIMITS = {
+    "max_page": 500,
+    "person_movies": 20,
+    "movie_cast": 10,
+    "recent_interactions": 10,
+    "because_you_watched_source": 5,
+    "because_you_watched_per_movie": 5,
+    "top_genres": 3,
+    "director_recommendations": 10,
+    "compare_movies": 2,
+}
+
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
@@ -115,6 +128,12 @@ CORS_ALLOW_CREDENTIALS = True
 TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "")
 TMDB_API_BASE_URL = "https://api.themoviedb.org/3"
 TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p"
+DEFAULT_PROVIDER_COUNTRY = os.environ.get("DEFAULT_PROVIDER_COUNTRY", "US")
+WATCH_PROVIDER_COUNTRIES = [
+    c.strip().upper()
+    for c in os.environ.get("WATCH_PROVIDER_COUNTRIES", DEFAULT_PROVIDER_COUNTRY).split(",")
+    if c.strip()
+]
 
 CACHES = {
     "default": {

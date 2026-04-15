@@ -5,6 +5,7 @@ from django.db import models
 class User(AbstractUser):
     email = models.EmailField(unique=True)
     avatar_url = models.URLField(max_length=500, blank=True, default="")
+    # Callable default intentionally used to avoid shared mutable defaults.
     favorite_genres = models.JSONField(default=list, blank=True)
     country_code = models.CharField(max_length=5, default="US")
 

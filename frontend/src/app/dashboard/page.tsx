@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   BarChart3, Heart, ThumbsDown, Eye, Bookmark, Star,
@@ -13,6 +13,8 @@ export default function DashboardPage() {
   const { user, isAuthenticated, loading: authLoading } = useAuth();
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [activeList, setActiveList] = useState<"liked" | "disliked" | "watched" | "watchlist" | null>(null);
+  const listPanelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -78,15 +80,47 @@ export default function DashboardPage() {
   const prefScores = stats?.preference_scores || [];
   const timeline = stats?.activity_timeline || [];
   const recent = stats?.recent_activity || [];
+  const likedMovies = stats?.liked_movies || [];
+  const dislikedMovies = stats?.disliked_movies || [];
+  const watchedMovies = stats?.watched_movies || [];
+  const watchlistMovies = stats?.watchlist_movies || [];
   const maxGenreCount = Math.max(...genreDist.map((g: any) => g.count), 1);
   const maxPrefWeight = Math.max(...prefScores.map((p: any) => p.weight), 1);
 
   const statCards = [
-    { label: "Liked", value: summary.likes || 0, icon: Heart, color: "text-emerald-400", bg: "from-emerald-500/10 to-emerald-600/5" },
-    { label: "Disliked", value: summary.dislikes || 0, icon: ThumbsDown, color: "text-red-400", bg: "from-red-500/10 to-red-600/5" },
-    { label: "Watched", value: summary.watched || 0, icon: Eye, color: "text-blue-400", bg: "from-blue-500/10 to-blue-600/5" },
-    { label: "Watchlist", value: summary.watchlist_total || 0, icon: Bookmark, color: "text-gold", bg: "from-gold/10 to-amber-600/5" },
+    { key: "liked", label: "Liked", value: summary.likes || 0, icon: Heart, color: "text-emerald-400", bg: "from-emerald-500/10 to-emerald-600/5" },
+    { key: "disliked", label: "Disliked", value: summary.dislikes || 0, icon: ThumbsDown, color: "text-red-400", bg: "from-red-500/10 to-red-600/5" },
+    { key: "watched", label: "Watched", value: summary.watched || 0, icon: Eye, color: "text-blue-400", bg: "from-blue-500/10 to-blue-600/5" },
+    { key: "watchlist", label: "Watchlist", value: summary.watchlist_total || 0, icon: Bookmark, color: "text-gold", bg: "from-gold/10 to-amber-600/5" },
   ];
+
+  const listMeta: Record<string, { title: string; emptyText: string; colorClass: string }> = {
+    liked: { title: "Liked Movies", emptyText: "You have not liked any movies yet.", colorClass: "text-emerald-400" },
+    disliked: { title: "Disliked Movies", emptyText: "You have not disliked any movies yet.", colorClass: "text-red-400" },
+    watched: { title: "Watched Movies", emptyText: "No watched movie activity yet.", colorClass: "text-blue-400" },
+    watchlist: { title: "Watchlist Movies", emptyText: "Your watchlist is empty.", colorClass: "text-gold" },
+  };
+
+  function getActiveListItems() {
+    if (activeList === "liked") return likedMovies;
+    if (activeList === "disliked") return dislikedMovies;
+    if (activeList === "watched") return watchedMovies;
+    if (activeList === "watchlist") return watchlistMovies;
+    return [];
+  }
+
+  function getItemDate(item: any) {
+    const raw = item.liked_at || item.disliked_at || item.watched_at || item.added_at;
+    return raw ? new Date(raw).toLocaleDateString() : "";
+  }
+
+  function handleStatCardClick(cardKey?: "liked" | "disliked" | "watched" | "watchlist") {
+    if (!cardKey) return;
+    setActiveList(cardKey);
+    requestAnimationFrame(() => {
+      listPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
 
   return (
     <div className="pt-24 pb-20 px-6 md:px-10 lg:px-20 max-w-[1440px] mx-auto">
@@ -107,17 +141,86 @@ export default function DashboardPage() {
 
       {/* Statistics cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-        {statCards.map(({ label, value, icon: Icon, color, bg }) => (
-          <div key={label} className="glass-card rounded-xl p-5 relative overflow-hidden">
+        {statCards.map(({ key, label, value, icon: Icon, color, bg }) => (
+          <div
+            key={label}
+            className="glass-card rounded-xl p-5 relative overflow-hidden cursor-pointer hover:border-gold/30 transition-colors"
+            onClick={() => handleStatCardClick(key as "liked" | "disliked" | "watched" | "watchlist")}
+            {...(key
+              ? {
+                  role: "button",
+                  tabIndex: 0,
+                  onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleStatCardClick(key as "liked" | "disliked" | "watched" | "watchlist");
+                    }
+                  },
+                  title: `Click to view ${label.toLowerCase()} list`,
+                }
+              : {})}
+          >
             <div className={`absolute inset-0 bg-gradient-to-br ${bg}`} />
             <div className="relative z-10">
               <Icon className={`w-5 h-5 ${color} mb-3`} />
               <p className="text-3xl font-bold font-display">{value}</p>
               <p className="text-[11px] text-white/30 uppercase tracking-wider mt-1">{label}</p>
+              <p className="text-[10px] text-gold/70 mt-1">View list</p>
             </div>
           </div>
         ))}
       </div>
+
+      {activeList && (
+        <div ref={listPanelRef} className="glass-card rounded-xl p-6 mb-10">
+          <div className="flex items-center justify-between gap-4 mb-5">
+            <div className="flex items-center gap-2">
+              {activeList === "liked" && <Heart className="w-4 h-4 text-emerald-400" />}
+              {activeList === "disliked" && <ThumbsDown className="w-4 h-4 text-red-400" />}
+              {activeList === "watched" && <Eye className="w-4 h-4 text-blue-400" />}
+              {activeList === "watchlist" && <Bookmark className="w-4 h-4 text-gold" />}
+              <h2 className="text-lg font-bold font-display">{listMeta[activeList].title}</h2>
+            </div>
+            {getActiveListItems().length > 0 && (
+              <button
+                onClick={() => setActiveList(null)}
+                className="text-xs px-3 py-1.5 rounded-lg bg-gradient-to-r from-gold to-gold-dim text-surface-0 font-semibold hover:shadow-md hover:shadow-gold/20 transition-all"
+              >
+                Hide
+              </button>
+            )}
+          </div>
+          {getActiveListItems().length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {getActiveListItems().map((item: any, idx: number) => (
+                <Link
+                  key={`${item.movie_tmdb_id}-${idx}`}
+                  href={`/movie/${item.movie_tmdb_id}`}
+                  className="flex items-center justify-between p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:border-emerald-500/30 transition-colors"
+                >
+                  <span className="text-sm text-white/80 truncate pr-3">{item.movie_title || `Movie #${item.movie_tmdb_id}`}</span>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {item.source_interaction && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                        item.source_interaction === "like"
+                          ? "bg-emerald-500/15 text-emerald-400"
+                          : item.source_interaction === "dislike"
+                            ? "bg-red-500/15 text-red-400"
+                            : "bg-blue-500/15 text-blue-400"
+                      }`}>
+                        {item.source_interaction}
+                      </span>
+                    )}
+                    <span className="text-[11px] text-white/25">{getItemDate(item)}</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-white/30">{listMeta[activeList].emptyText}</p>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
         {/* Genre distribution */}

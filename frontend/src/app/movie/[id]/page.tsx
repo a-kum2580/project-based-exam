@@ -11,7 +11,8 @@ import {
 } from "lucide-react";
 import MovieCarousel from "@/components/MovieCarousel";
 import MovieCard from "@/components/MovieCard";
-import { moviesAPI } from "@/lib/api";
+import { moviesAPI, recommendationsAPI } from "@/lib/api";
+import { useAuth } from "@/lib/AuthContext";
 import {
   posterUrl, backdropUrl, formatRuntime, formatCurrency,
   formatDate, ratingColor,
@@ -49,17 +50,21 @@ function saveWatchlist(movies: any[]) {
 export default function MovieDetailPage() {
   const params = useParams();
   const tmdbId = Number(params.id);
+  const { isAuthenticated } = useAuth();
 
   const [movie, setMovie] = useState<any>(null);
   const [recommendations, setRecommendations] = useState<MovieCompact[]>([]);
   const [similarMovies, setSimilarMovies] = useState<MovieCompact[]>([]);
   const [likedRecs, setLikedRecs] = useState<MovieCompact[]>([]);
   const [showTrailer, setShowTrailer] = useState(false);
+  const [showWatchlistConfirm, setShowWatchlistConfirm] = useState(false);
+  const [isRemovingFromWatchlist, setIsRemovingFromWatchlist] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const [isLiked, setIsLiked] = useState(false);
   const [isDisliked, setIsDisliked] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
+  const [watchlistItemId, setWatchlistItemId] = useState<number | null>(null);
   const [likeCount, setLikeCount] = useState(0);
 
   // Initializing like/bookmark state
@@ -72,7 +77,22 @@ export default function MovieDetailPage() {
     setIsDisliked(likedEntry?.type === "dislike");
     setIsBookmarked(watchlist.some((m: any) => m.id === tmdbId));
     setLikeCount(liked.filter((m: any) => m.type === "like").length);
-  }, [tmdbId]);
+
+    async function syncWatchlistStatusFromBackend() {
+      if (!isAuthenticated) return;
+      try {
+        const payload: any = await recommendationsAPI.getWatchlist();
+        const items = Array.isArray(payload) ? payload : payload?.results || [];
+        const matched = items.find((item: any) => item.movie_tmdb_id === tmdbId);
+        setIsBookmarked(!!matched);
+        setWatchlistItemId(matched?.id ?? null);
+      } catch {
+        // Keep local fallback state when backend fetch fails.
+      }
+    }
+
+    syncWatchlistStatusFromBackend();
+  }, [tmdbId, isAuthenticated]);
 
   // Fetching movie data plus recommendations
   useEffect(() => {
@@ -124,7 +144,7 @@ export default function MovieDetailPage() {
   }
 
   // Like / Dislike / Bookmark handlers
-  const handleLike = useCallback(() => {
+  const handleLike = useCallback(async () => {
     const liked = getLikedMovies();
     const filtered = liked.filter((m: any) => m.id !== tmdbId);
 
@@ -133,6 +153,16 @@ export default function MovieDetailPage() {
       saveLikedMovies(filtered);
       setIsLiked(false);
       setLikeCount((c) => c - 1);
+      if (isAuthenticated) {
+        try {
+          await recommendationsAPI.untrackInteraction({
+            movie_tmdb_id: tmdbId,
+            interaction_type: "like",
+          });
+        } catch (err) {
+          console.error("Failed to remove like interaction:", err);
+        }
+      }
     } else {
       // Like
       filtered.push({
@@ -147,16 +177,43 @@ export default function MovieDetailPage() {
       setIsLiked(true);
       setIsDisliked(false);
       setLikeCount((c) => c + 1);
+      if (isAuthenticated && movie) {
+        const genreIds = (movie.genres || []).map((g: any) => g.tmdb_id ?? g.id).filter(Boolean);
+        try {
+          await recommendationsAPI.untrackInteraction({
+            movie_tmdb_id: tmdbId,
+            interaction_type: "dislike",
+          });
+          await recommendationsAPI.trackInteraction({
+            movie_tmdb_id: tmdbId,
+            movie_title: movie.title || "",
+            interaction_type: "like",
+            genre_ids: genreIds,
+          });
+        } catch (err) {
+          console.error("Failed to persist like interaction:", err);
+        }
+      }
     }
-  }, [tmdbId, isLiked, movie]);
+  }, [tmdbId, isLiked, movie, isAuthenticated]);
 
-  const handleDislike = useCallback(() => {
+  const handleDislike = useCallback(async () => {
     const liked = getLikedMovies();
     const filtered = liked.filter((m: any) => m.id !== tmdbId);
 
     if (isDisliked) {
       saveLikedMovies(filtered);
       setIsDisliked(false);
+      if (isAuthenticated) {
+        try {
+          await recommendationsAPI.untrackInteraction({
+            movie_tmdb_id: tmdbId,
+            interaction_type: "dislike",
+          });
+        } catch (err) {
+          console.error("Failed to remove dislike interaction:", err);
+        }
+      }
     } else {
       filtered.push({
         id: tmdbId,
@@ -169,15 +226,72 @@ export default function MovieDetailPage() {
       saveLikedMovies(filtered);
       setIsDisliked(true);
       setIsLiked(false);
+      if (isAuthenticated && movie) {
+        const genreIds = (movie.genres || []).map((g: any) => g.tmdb_id ?? g.id).filter(Boolean);
+        try {
+          await recommendationsAPI.untrackInteraction({
+            movie_tmdb_id: tmdbId,
+            interaction_type: "like",
+          });
+          await recommendationsAPI.trackInteraction({
+            movie_tmdb_id: tmdbId,
+            movie_title: movie.title || "",
+            interaction_type: "dislike",
+            genre_ids: genreIds,
+          });
+        } catch (err) {
+          console.error("Failed to persist dislike interaction:", err);
+        }
+      }
     }
-  }, [tmdbId, isDisliked, movie]);
+  }, [tmdbId, isDisliked, movie, isAuthenticated]);
 
-  const handleBookmark = useCallback(() => {
+  const removeFromWatchlistWithChoice = useCallback(async (watchedBeforeRemoving: boolean) => {
+    const watchlist = getWatchlist();
+    setIsRemovingFromWatchlist(true);
+    saveWatchlist(watchlist.filter((m: any) => m.id !== tmdbId));
+    setIsBookmarked(false);
+
+    if (isAuthenticated) {
+      try {
+        if (watchedBeforeRemoving && movie) {
+          const genreIds = (movie.genres || []).map((g: any) => g.tmdb_id ?? g.id).filter(Boolean);
+          await recommendationsAPI.trackInteraction({
+            movie_tmdb_id: tmdbId,
+            movie_title: movie.title || "",
+            interaction_type: "watched",
+            genre_ids: genreIds,
+          });
+        }
+
+        if (watchlistItemId) {
+          await recommendationsAPI.removeFromWatchlist(watchlistItemId);
+        } else {
+          const payload: any = await recommendationsAPI.getWatchlist();
+          const items = Array.isArray(payload) ? payload : payload?.results || [];
+          const matched = items.find((item: any) => item.movie_tmdb_id === tmdbId);
+          if (matched?.id) {
+            await recommendationsAPI.removeFromWatchlist(matched.id);
+          }
+        }
+        await recommendationsAPI.untrackInteraction({
+          movie_tmdb_id: tmdbId,
+          interaction_type: "watchlist",
+        });
+      } catch (err) {
+        console.error("Failed to remove watchlist item:", err);
+      }
+    }
+    setWatchlistItemId(null);
+    setIsRemovingFromWatchlist(false);
+    setShowWatchlistConfirm(false);
+  }, [tmdbId, movie, isAuthenticated, watchlistItemId]);
+
+  const handleBookmark = useCallback(async () => {
     const watchlist = getWatchlist();
 
     if (isBookmarked) {
-      saveWatchlist(watchlist.filter((m: any) => m.id !== tmdbId));
-      setIsBookmarked(false);
+      setShowWatchlistConfirm(true);
     } else {
       watchlist.push({
         id: tmdbId,
@@ -187,8 +301,27 @@ export default function MovieDetailPage() {
       });
       saveWatchlist(watchlist);
       setIsBookmarked(true);
+      if (isAuthenticated && movie) {
+        try {
+          const created: any = await recommendationsAPI.addToWatchlist({
+            movie_tmdb_id: tmdbId,
+            movie_title: movie.title || "",
+            poster_path: movie.poster_path || "",
+          });
+          setWatchlistItemId(created?.id ?? null);
+          const genreIds = (movie.genres || []).map((g: any) => g.tmdb_id ?? g.id).filter(Boolean);
+          await recommendationsAPI.trackInteraction({
+            movie_tmdb_id: tmdbId,
+            movie_title: movie.title || "",
+            interaction_type: "watchlist",
+            genre_ids: genreIds,
+          });
+        } catch (err) {
+          console.error("Failed to persist watchlist item:", err);
+        }
+      }
     }
-  }, [tmdbId, isBookmarked, movie]);
+  }, [tmdbId, isBookmarked, movie, isAuthenticated]);
 
   // Loading state
   if (loading) {
@@ -645,6 +778,45 @@ export default function MovieDetailPage() {
       </div>
 
       {/* Trailer modal*/}
+      {showWatchlistConfirm && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => !isRemovingFromWatchlist && setShowWatchlistConfirm(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-surface-2/95 shadow-2xl shadow-black/70 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="h-1 bg-gradient-to-r from-gold via-gold-light to-gold-dim" />
+            <div className="p-6">
+              <h3 className="text-xl font-bold font-display mb-2">Before removing this movie</h3>
+              <p className="text-sm text-white/60 mb-6">
+                Did you watch this movie? If yes, we will add it to your watched count before removing it from your watchlist.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => removeFromWatchlistWithChoice(true)}
+                  disabled={isRemovingFromWatchlist}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-gold to-gold-dim text-surface-0 font-semibold text-sm disabled:opacity-50"
+                >
+                  Yes, I watched it
+                </button>
+                <button
+                  onClick={() => removeFromWatchlistWithChoice(false)}
+                  disabled={isRemovingFromWatchlist}
+                  className="flex-1 px-4 py-2.5 rounded-xl glass-card text-white/70 border border-white/[0.08] font-semibold text-sm hover:text-white disabled:opacity-50"
+                >
+                  No, just remove
+                </button>
+              </div>
+              {isRemovingFromWatchlist && (
+                <p className="text-xs text-white/40 mt-4">Updating your watchlist...</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {showTrailer && trailer && (
         <div
           className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
