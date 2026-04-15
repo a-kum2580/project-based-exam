@@ -177,9 +177,15 @@ class DashboardAPITest(APITestCase):
             user=self.user, movie_tmdb_id=550, movie_title="Fight Club",
             interaction_type="like", genre_ids=[28]
         )
+        UserMovieInteraction.objects.create(
+            user=self.user, movie_tmdb_id=551, movie_title="Heat",
+            interaction_type="dislike", genre_ids=[80]
+        )
         response = self.client.get("/api/recommendations/dashboard/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["summary"]["likes"], 1)
+        self.assertEqual(response.data["summary"]["dislikes"], 1)
+        self.assertEqual(response.data["summary"]["watched"], 2)
 
 
 class BecauseYouWatchedAPITest(APITestCase):
