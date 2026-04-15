@@ -248,10 +248,24 @@ export default function MovieDetailPage() {
     const watchlist = getWatchlist();
 
     if (isBookmarked) {
+      const watchedBeforeRemoving = window.confirm(
+        "Did you watch this movie before removing it from your watchlist?\n\nClick OK for Yes, or Cancel for No."
+      );
+
       saveWatchlist(watchlist.filter((m: any) => m.id !== tmdbId));
       setIsBookmarked(false);
       if (isAuthenticated) {
         try {
+          if (watchedBeforeRemoving && movie) {
+            const genreIds = (movie.genres || []).map((g: any) => g.tmdb_id ?? g.id).filter(Boolean);
+            await recommendationsAPI.trackInteraction({
+              movie_tmdb_id: tmdbId,
+              movie_title: movie.title || "",
+              interaction_type: "watched",
+              genre_ids: genreIds,
+            });
+          }
+
           if (watchlistItemId) {
             await recommendationsAPI.removeFromWatchlist(watchlistItemId);
           } else {

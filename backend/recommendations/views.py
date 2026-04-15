@@ -92,12 +92,13 @@ def _serialize_movie_map(movie_map: dict[str, list[dict[str, Any]]]) -> dict[str
 def _build_dashboard_summary(interactions, watchlist) -> dict[str, Any]:
     likes_count = interactions.filter(interaction_type="like").count()
     dislikes_count = interactions.filter(interaction_type="dislike").count()
+    explicit_watched_count = interactions.filter(interaction_type="watched").count()
 
     summary = {
         "total_interactions": interactions.count(),
         "likes": likes_count,
         "dislikes": dislikes_count,
-        "watched": likes_count + dislikes_count,
+        "watched": likes_count + dislikes_count + explicit_watched_count,
         "searches": interactions.filter(interaction_type="search").count(),
         "watchlist_total": watchlist.count(),
         "watchlist_watched": watchlist.filter(watched=True).count(),
