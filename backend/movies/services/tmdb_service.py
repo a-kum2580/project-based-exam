@@ -13,6 +13,14 @@ CACHE_TTL_MEDIUM = 3600    # 1 hour for movie details
 CACHE_TTL_LONG = 86400     # 24 hours for genres/people
 
 
+class TMDBAPIError(Exception):
+    """Raised when TMDB API access fails during sync operations."""
+
+
+class MovieNotFoundError(Exception):
+    """Raised when a requested movie payload is missing/invalid from TMDB."""
+
+
 class TMDBService:
     """Client for the TMDB REST API v3."""
 
@@ -142,8 +150,8 @@ class TMDBService:
 class MovieSyncService:
     """Syncs TMDB data to local Django models."""
 
-    def __init__(self):
-        self.tmdb = TMDBService()
+    def __init__(self, tmdb_client: Optional[TMDBService] = None):
+        self.tmdb = tmdb_client or TMDBService()
 
     def sync_genres(self):
         """Syncing all genres from TMDB to local DB."""
@@ -162,9 +170,15 @@ class MovieSyncService:
         from movies.models import Movie, Genre, Person, MovieCast, WatchProvider
 
         data = self.tmdb.get_movie_details(tmdb_id)
+        if isinstance(data, dict) and data.get("_error"):
+            msg = f"TMDB error while syncing movie {tmdb_id}: {data['_error']}"
+            logger.error(msg)
+            raise TMDBAPIError(msg)
+
         if not data or "id" not in data:
-            logger.warning(f"Could not fetch movie {tmdb_id}")
-            return None
+            msg = f"Movie payload missing or invalid for TMDB ID {tmdb_id}"
+            logger.warning(msg)
+            raise MovieNotFoundError(msg)
 
         movie, _ = Movie.objects.update_or_create(
             tmdb_id=data["id"],
@@ -265,7 +279,10 @@ class MovieSyncService:
         for page in range(1, pages + 1):
             data = self.tmdb.get_trending_movies(page=page)
             for movie_data in data.get("results", []):
-                self.sync_movie(movie_data["id"])
+                try:
+                    self.sync_movie(movie_data["id"])
+                except (TMDBAPIError, MovieNotFoundError) as exc:
+                    logger.warning("Skipping trending movie %s: %s", movie_data.get("id"), exc)
 
 
 class WikipediaService:

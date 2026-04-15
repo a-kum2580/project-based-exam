@@ -231,8 +231,10 @@ class WikipediaServiceTest(TestCase):
 class DiscoverFilteredAPITest(APITestCase):
     """Test the /api/movies/discover/ endpoint with multiple filters."""
 
-    @patch("movies.views.tmdb")
-    def test_filters_forwarded_and_response_structured(self, mock_tmdb):
+    @patch("movies.views.get_tmdb_service")
+    def test_filters_forwarded_and_response_structured(self, mock_get_tmdb_service):
+        mock_tmdb = MagicMock()
+        mock_get_tmdb_service.return_value = mock_tmdb
         mock_tmdb.discover_movies.return_value = {
             "results": [
                 {"id": 1, "title": "Filtered Movie", "overview": "",
@@ -342,8 +344,10 @@ class MovieDiscoveryServiceAdaptiveScanTest(TestCase):
 class TrendingMoviesAPITest(APITestCase):
     """Test the /api/movies/trending/ endpoint."""
 
-    @patch("movies.views.tmdb")
-    def test_trending_returns_results_with_window(self, mock_tmdb):
+    @patch("movies.views.get_tmdb_service")
+    def test_trending_returns_results_with_window(self, mock_get_tmdb_service):
+        mock_tmdb = MagicMock()
+        mock_get_tmdb_service.return_value = mock_tmdb
         mock_tmdb.get_trending_movies.return_value = {
             "results": [
                 {"id": 10, "title": "Trending Today", "overview": "",

@@ -18,14 +18,20 @@ from .serializers import (
 from .services.engine import RecommendationEngine
 from movies.serializers import TMDBMovieSerializer
 
-engine = RecommendationEngine()
+MAX_PAGE = 500
 
 
-def _parse_page(request, default=1):
+def get_recommendation_engine() -> RecommendationEngine:
+    return RecommendationEngine()
+
+
+def _parse_page(request, default=1, max_page=MAX_PAGE):
     """Parse a positive int `page` query param."""
     try:
         page = int(request.query_params.get("page", default))
-        return page if page > 0 else default
+        if page <= 0:
+            return default
+        return min(page, max_page)
     except (TypeError, ValueError):
         return default
 
@@ -62,7 +68,7 @@ def _build_activity_timeline(interactions_qs, days=30):
     return [{"date": str(d["date"]), "count": d["count"]} for d in daily]
 
 
-def _build_preference_scores(user, limit=10):
+def _build_preference_scores(user, engine, limit=10):
     """Compute and return top-N saved preference scores for the user."""
     engine.compute_genre_preferences(user)
     prefs = UserGenrePreference.objects.filter(user=user).order_by("-weight")[:limit]
@@ -73,6 +79,7 @@ def _build_preference_scores(user, limit=10):
 @permission_classes([IsAuthenticated])
 def personalized_recommendations(request):
     """GET /api/recommendations/for-you/ → personalized picks."""
+    engine = get_recommendation_engine()
     page = _parse_page(request, default=1)
     movies = engine.get_recommendations(request.user, page=page)
     serializer = TMDBMovieSerializer(movies, many=True)
@@ -83,6 +90,7 @@ def personalized_recommendations(request):
 @permission_classes([IsAuthenticated])
 def because_you_watched(request):
     """GET /api/recommendations/because-you-watched/"""
+    engine = get_recommendation_engine()
     data = engine.get_because_you_watched(request.user)
     result = {}
     for title, movies in data.items():
@@ -95,6 +103,7 @@ def because_you_watched(request):
 def genre_preferences(request):
     """GET /api/recommendations/preferences/"""
     # Recomputing preferences
+    engine = get_recommendation_engine()
     engine.compute_genre_preferences(request.user)
     prefs = UserGenrePreference.objects.filter(user=request.user)
     serializer = UserGenrePreferenceSerializer(prefs, many=True)
@@ -151,6 +160,7 @@ def dashboard_stats(request):
     Returns aggregated stats for the user's dashboard.
     """
     user = request.user
+    engine = get_recommendation_engine()
 
     interactions = UserMovieInteraction.objects.filter(user=user)
     watchlist = Watchlist.objects.filter(user=user)
@@ -173,7 +183,7 @@ def dashboard_stats(request):
     return Response({
         "summary": summary,
         "genre_distribution": _build_genre_distribution(interactions),
-        "preference_scores": _build_preference_scores(user),
+        "preference_scores": _build_preference_scores(user, engine),
         "activity_timeline": _build_activity_timeline(interactions),
         "recent_activity": UserMovieInteractionSerializer(interactions.order_by("-created_at")[:10], many=True).data,
     })

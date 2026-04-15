@@ -72,6 +72,7 @@
   - `python manage.py test users` → PASS
   - `python manage.py test users recommendations movies` → PASS (49 tests)
   - `python manage.py test movies` after adaptive scan refactor → PASS (23 tests)
+  - `python manage.py test movies recommendations users` after smells #3-#6 fixes → PASS (51 tests)
   - Note: warnings like “Unauthorized”/“Bad Request” appear during tests because negative test cases intentionally validate 401/400 responses.
 
 ### f) Remaining Limitations (known risks / technical debt)
@@ -185,25 +186,85 @@
    - **Location**: `backend/movies/views.py:122-135` (`PersonViewSet.enrich`)
    - **Issue**: `@action(detail=True, methods=["get"])` performs `.save()` on the person model.
    - **Impact**: Violates REST principles; idempotent GET requests should not have side effects.
-   - **Fix Strategy**: Convert to POST endpoint or make enrichment on-demand without persistence.
+   - **Solution Implemented**: Keep GET endpoint but make enrichment response-only (no persistence).
+
+   **What changed in code**
+   - `PersonViewSet.enrich` now:
+     - fetches TMDB details
+     - serializes the existing local person
+     - overlays response fields (`biography`, `birthday`, `place_of_birth`) in-memory
+     - returns enriched payload without calling `.save()`
+   - This preserves endpoint compatibility while removing side effects.
+
+   **Why this fix was selected**
+   - avoids a breaking API contract change from GET to POST
+   - restores GET idempotency
+   - still provides fresh enrichment data to clients
 
 4. **Missing Pagination Boundary Checks**
    - **Location**: Throughout views (especially `discover_filtered`)
    - **Issue**: `page` parameter not validated for negative values or absurd ranges (e.g., `?page=-999` or `?page=99999`).
    - **Impact**: Invalid queries could bypass caching or cause unexpected API calls.
-   - **Fix Strategy**: Add validation: `if page < 1: page = 1` and `if page > max_pages: page = max_pages`.
+   - **Solution Implemented**: Added bounded page parsing in both movies and recommendations flows.
+
+   **What changed in code**
+   - Added `safe_page(...)` in `backend/movies/views.py`:
+     - coerces invalid/negative pages to `1`
+     - caps large pages at `MAX_PAGE=500`
+   - Applied `safe_page(...)` to movie endpoints using `page`:
+     - genres list fallback
+     - search, trending, now-playing, top-rated, moods
+   - In discovery service, `parse_request_filters(...)` now uses `_sanitize_page(...)` for bounded pages.
+   - In recommendations, `_parse_page(...)` now caps to `MAX_PAGE=500`.
+
+   **Result**
+   - no negative page numbers reach TMDB calls
+   - very large page inputs are bounded consistently
+   - paging behavior is deterministic across endpoints
 
 5. **Weak Exception Handling in `sync_movie`**
    - **Location**: `backend/movies/services/tmdb_service.py:165-200`
    - **Issue**: Returns `None` silently without distinguishing between TMDB API failure and invalid data.
    - **Impact**: Caller doesn't know root cause; harder to retry or handle gracefully.
-   - **Fix Strategy**: Raise custom exceptions (`TMDBAPIError`, `MovieNotFoundError`) with context.
+   - **Solution Implemented**: Introduced explicit domain exceptions with contextual messages.
+
+   **What changed in code**
+   - Added custom exceptions in `backend/movies/services/tmdb_service.py`:
+     - `TMDBAPIError`
+     - `MovieNotFoundError`
+   - `MovieSyncService.sync_movie(...)` now:
+     - raises `TMDBAPIError` when TMDB returns `_error`
+     - raises `MovieNotFoundError` when payload lacks a valid movie `id`
+   - `sync_trending(...)` now catches these exceptions per movie, logs context, and continues.
+   - `movie_detail_tmdb` endpoint now maps exceptions explicitly:
+     - `MovieNotFoundError` -> 404 response
+     - `TMDBAPIError` -> APIException (502-style DRF error path)
+   - `sync_movies` management command now catches and prints these exceptions clearly.
+
+   **Result**
+   - failure modes are now explicit and actionable
+   - callers can distinguish remote API failure from invalid/missing movie payload
+   - trending sync is more resilient (one bad item no longer aborts batch)
 
 6. **Service Class Not Following Dependency Injection**
    - **Location**: `backend/movies/views.py:19-20`, `backend/recommendations/views.py:20`
    - **Issue**: Global singleton instances (`tmdb = TMDBService()`, `engine = RecommendationEngine()`) created at module level.
    - **Impact**: Difficult to mock in tests; potential state sharing across requests.
-   - **Fix Strategy**: Create instances per-request or inject via view initialization.
+   - **Solution Implemented**: Replaced module-level singletons with provider functions (per-request construction).
+
+   **What changed in code**
+   - In `backend/movies/views.py`, added providers:
+     - `get_tmdb_service()`
+     - `get_movie_sync_service(tmdb_service=...)`
+     - `get_discovery_service(tmdb_service)`
+   - Endpoints/actions now resolve services via providers instead of global instances.
+   - In `backend/recommendations/views.py`, replaced global `engine` with `get_recommendation_engine()` and resolved engine inside each endpoint.
+   - Tests updated to patch provider functions (`movies.views.get_tmdb_service`) instead of patching global service objects.
+
+   **Why this improves design**
+   - test mocking is simpler and more reliable
+   - avoids accidental shared mutable state at module level
+   - supports future dependency overrides (factory-based injection)
 
 #### **MEDIUM SEVERITY** (affects maintainability/scalability)
 
@@ -376,4 +437,8 @@
 - **Refactor**
   - `dashboard_stats` refactored into helpers for maintainability.
   - `discover_filtered` moved to `MovieDiscoveryService`, with adaptive early-stop scan to replace full linear scan behavior.
+  - `PersonViewSet.enrich` changed to side-effect-free GET enrichment response (no DB write).
+  - paging now uses bounded page parsing across movies/recommendations (`1..500`).
+  - sync flow now raises and handles explicit exceptions (`TMDBAPIError`, `MovieNotFoundError`).
+  - module-level service singletons replaced with provider-based dependency construction in views.
 

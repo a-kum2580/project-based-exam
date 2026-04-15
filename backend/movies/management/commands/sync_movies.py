@@ -6,7 +6,7 @@ Usage:
     python manage.py sync_movies --movie 550       # Sync a specific movie (Fight Club)
 """
 from django.core.management.base import BaseCommand
-from movies.services.tmdb_service import MovieSyncService
+from movies.services.tmdb_service import MovieSyncService, TMDBAPIError, MovieNotFoundError
 
 
 class Command(BaseCommand):
@@ -34,8 +34,10 @@ class Command(BaseCommand):
         if options["movie"] > 0:
             tmdb_id = options["movie"]
             self.stdout.write(f"Syncing movie {tmdb_id}...")
-            movie = service.sync_movie(tmdb_id)
-            if movie:
+            try:
+                movie = service.sync_movie(tmdb_id)
                 self.stdout.write(self.style.SUCCESS(f"Synced: {movie.title}"))
-            else:
-                self.stdout.write(self.style.ERROR(f"Failed to sync movie {tmdb_id}"))
+            except MovieNotFoundError as exc:
+                self.stdout.write(self.style.ERROR(str(exc)))
+            except TMDBAPIError as exc:
+                self.stdout.write(self.style.ERROR(str(exc)))

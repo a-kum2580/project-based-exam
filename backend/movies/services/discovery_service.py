@@ -53,7 +53,7 @@ class MovieDiscoveryService:
 
     def parse_request_filters(self, query_params) -> dict:
         return {
-            "page": self._safe_int(query_params.get("page", 1), default=1),
+            "page": self._sanitize_page(query_params.get("page", 1)),
             "q": (query_params.get("q", "") or "").strip(),
             "genre": query_params.get("genre"),
             "year_from": self._safe_int(query_params.get("year_from"), default=None),
@@ -64,6 +64,12 @@ class MovieDiscoveryService:
             "language": query_params.get("language"),
             "sort": query_params.get("sort", "popularity.desc"),
         }
+
+    def _sanitize_page(self, value: Any, default: int = 1) -> int:
+        page = self._safe_int(value, default=default)
+        if page is None or page < 1:
+            return default
+        return min(page, self.max_scan_pages)
 
     def discover(self, filters: dict) -> dict:
         if filters["q"]:
