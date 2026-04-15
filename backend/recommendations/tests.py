@@ -151,6 +151,41 @@ class DashboardAPITest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["summary"]["likes"], 1)
 
+
+class BecauseYouWatchedAPITest(APITestCase):
+    """Tests for the because-you-watched endpoint response shaping."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="watchuser", password="testpass123")
+        self.client.force_authenticate(user=self.user)
+
+    @patch("recommendations.views.get_recommendation_engine")
+    def test_because_you_watched_serializes_nested_movie_groups(self, mock_get_engine):
+        mock_engine = MagicMock()
+        mock_engine.get_because_you_watched.return_value = {
+            "Fight Club": [
+                {
+                    "id": 550,
+                    "title": "Fight Club",
+                    "overview": "",
+                    "release_date": "1999-10-15",
+                    "vote_average": 8.4,
+                    "vote_count": 25000,
+                    "popularity": 50.0,
+                    "poster_path": "/fc.jpg",
+                    "backdrop_path": "/fc_bg.jpg",
+                }
+            ]
+        }
+        mock_get_engine.return_value = mock_engine
+
+        response = self.client.get("/api/recommendations/because-you-watched/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("Fight Club", response.data)
+        self.assertEqual(response.data["Fight Club"][0]["title"], "Fight Club")
+        mock_engine.get_because_you_watched.assert_called_once_with(self.user)
+
 class RecommendationEnginePreferencesTest(TestCase):
     """Verify the engine computes normalised genre weights from interactions."""
 
@@ -247,6 +282,34 @@ class RecommendationEngineBoundaryTest(TestCase):
         self.assertEqual(len(movies), 1)
         self.assertEqual(movies[0]["title"], "Action Pick")
         mock_discover.assert_called_once()
+
+    @patch.object(TMDBService, "discover_movies")
+    @patch.object(RecommendationEngine, "compute_genre_preferences")
+    def test_recommendations_deduplicate_seen_and_repeat_movies(self, mock_compute, mock_discover):
+        mock_compute.return_value = [(28, 100.0)]
+        mock_discover.return_value = {
+            "results": [
+                {"id": 200, "title": "Seen Movie", "vote_average": 9.5},
+                {"id": 201, "title": "Unique Movie", "vote_average": 8.0},
+                {"id": 201, "title": "Unique Movie", "vote_average": 8.0},
+                {"id": 202, "title": "Second Movie", "vote_average": 7.0},
+            ],
+        }
+        UserMovieInteraction.objects.create(
+            user=self.user,
+            movie_tmdb_id=200,
+            movie_title="Seen Movie",
+            interaction_type="watched",
+            genre_ids=[28],
+        )
+
+        engine = RecommendationEngine()
+        movies = engine.get_recommendations(self.user, page=1, limit=10)
+
+        movie_ids = [movie["id"] for movie in movies]
+        self.assertEqual(movie_ids, [201, 202])
+        self.assertNotIn(200, movie_ids)
+        self.assertTrue(all("_recommendation_score" not in movie for movie in movies))
 
 
 class RecommendationEnginePolicyInjectionTest(TestCase):

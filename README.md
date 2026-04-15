@@ -60,6 +60,45 @@ Then fill in your actual values:
   - Must start with a **capital letter**
   - Must include at least **one special character** (e.g. `!@#$`)
 
+### Backend API Tests Explained
+
+The backend test suite includes both API tests and service-level tests. The two API tests we ran one at a time are:
+
+- **JWT login API test** - [backend/users/tests.py](backend/users/tests.py)
+  - Test name: `JWTAuthTest.test_obtain_token_is_case_insensitive`
+  - Endpoint: `POST /api/auth/token/`
+  - What it checks:
+    - the login endpoint accepts a username in a different case from the one stored in the database
+    - the custom JWT serializer maps the submitted username to the stored username using a case-insensitive lookup
+    - a valid password still returns `access` and `refresh` tokens
+  - Why it matters:
+    - the project treats usernames as case-insensitive for login, so users do not need to remember exact capitalization
+    - this test proves the custom token view and serializer are wired correctly
+
+- **Because-you-watched recommendations API test** - [backend/recommendations/tests.py](backend/recommendations/tests.py)
+  - Test name: `BecauseYouWatchedAPITest.test_because_you_watched_serializes_nested_movie_groups`
+  - Endpoint: `GET /api/recommendations/because-you-watched/`
+  - What it checks:
+    - the endpoint returns grouped recommendation results keyed by source movie title
+    - nested movie lists are serialized into API-safe JSON using `TMDBMovieSerializer`
+    - the response preserves the expected shape for the frontend
+  - Why it matters:
+    - the frontend depends on this grouped structure to render recommendations per watched movie
+    - this test verifies that response formatting is correct, not just that the engine returns data
+
+### Other Backend Coverage
+
+The backend test suite also includes service-level checks that validate movie sync behavior:
+
+- `MovieSyncServiceTest.test_sync_movie_creates_all_related_models`
+  - verifies that syncing a TMDB movie creates the movie, genres, directors, cast, trailer key, and watch providers
+- `MovieSyncServiceTest.test_sync_movie_raises_api_error_on_tmdb_failure`
+  - verifies that TMDB errors are surfaced as `TMDBAPIError`
+- `MovieSyncServiceTest.test_sync_movie_raises_not_found_for_invalid_payload`
+  - verifies that invalid TMDB payloads raise `MovieNotFoundError`
+
+These tests are useful for proving that the backend handles both success and failure paths consistently.
+
 ## TMDB API
 Get your free API key at: https://www.themoviedb.org/settings/api
 # project-based-exam

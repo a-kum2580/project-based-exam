@@ -7,7 +7,7 @@ from rest_framework import status
 from unittest.mock import patch, MagicMock
 
 from movies.services.discovery_service import MovieDiscoveryService
-from movies.services.tmdb_service import TMDBService, MovieSyncService, WikipediaService
+from movies.services.tmdb_service import TMDBService, MovieSyncService, WikipediaService, TMDBAPIError, MovieNotFoundError
 
 from .models import Genre, Person, Movie, MovieCast, WatchProvider
 
@@ -203,6 +203,20 @@ class MovieSyncServiceTest(TestCase):
         providers = WatchProvider.objects.filter(movie=movie)
         self.assertEqual(providers.count(), 1)
         self.assertEqual(providers.first().provider_name, "Netflix")
+
+    @patch.object(TMDBService, "get_movie_details")
+    def test_sync_movie_raises_api_error_on_tmdb_failure(self, mock_details):
+        mock_details.return_value = {"_error": "TMDB request failed for movie/550"}
+
+        with self.assertRaises(TMDBAPIError):
+            MovieSyncService().sync_movie(550)
+
+    @patch.object(TMDBService, "get_movie_details")
+    def test_sync_movie_raises_not_found_for_invalid_payload(self, mock_details):
+        mock_details.return_value = {"title": "Broken payload"}
+
+        with self.assertRaises(MovieNotFoundError):
+            MovieSyncService().sync_movie(550)
 
 class WikipediaServiceTest(TestCase):
     """Verify Wikipedia enrichment succeeds and falls back on 404."""
