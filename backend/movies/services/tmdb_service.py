@@ -167,20 +167,9 @@ class MovieSyncService:
             )
         logger.info(f"Synced {len(genres)} genres")
 
-    def sync_movie(self, tmdb_id: int):
-        """Syncing a single movie from TMDB to local DB with full details."""
-        from movies.models import Movie, Genre, Person, MovieCast, WatchProvider
-
-        data = self.tmdb.get_movie_details(tmdb_id)
-        if isinstance(data, dict) and data.get("_error"):
-            msg = f"TMDB error while syncing movie {tmdb_id}: {data['_error']}"
-            logger.error(msg)
-            raise TMDBAPIError(msg)
-
-        if not data or "id" not in data:
-            msg = f"Movie payload missing or invalid for TMDB ID {tmdb_id}"
-            logger.warning(msg)
-            raise MovieNotFoundError(msg)
+    @staticmethod
+    def _upsert_movie(data: dict):
+        from movies.models import Movie
 
         movie, _ = Movie.objects.update_or_create(
             tmdb_id=data["id"],
@@ -203,8 +192,12 @@ class MovieSyncService:
                 "homepage": data.get("homepage", ""),
             },
         )
+        return movie
 
-        # Sync genres
+    @staticmethod
+    def _sync_movie_genres(movie, data: dict):
+        from movies.models import Genre
+
         genre_ids = []
         for g in data.get("genres", []):
             genre, _ = Genre.objects.get_or_create(
@@ -214,10 +207,10 @@ class MovieSyncService:
             genre_ids.append(genre.id)
         movie.genres.set(genre_ids)
 
-        # Sync credits (directors + top cast)
-        credits = data.get("credits", {})
+    @staticmethod
+    def _sync_movie_people_and_cast(movie, credits: dict):
+        from movies.models import Person, MovieCast
 
-        # Directors
         director_ids = []
         for crew in credits.get("crew", []):
             if crew.get("job") == "Director":
@@ -232,7 +225,6 @@ class MovieSyncService:
                 director_ids.append(person.id)
         movie.directors.set(director_ids)
 
-        # Top 10 cast
         MovieCast.objects.filter(movie=movie).delete()
         for i, cast_member in enumerate(credits.get("cast", [])[:10]):
             person, _ = Person.objects.update_or_create(
@@ -250,7 +242,8 @@ class MovieSyncService:
                 order=i,
             )
 
-        # Trailer (first YouTube trailer)
+    @staticmethod
+    def _sync_trailer(movie, data: dict):
         videos = data.get("videos", {}).get("results", [])
         for v in videos:
             if v.get("site") == "YouTube" and v.get("type") == "Trailer":
@@ -258,23 +251,46 @@ class MovieSyncService:
                 movie.save(update_fields=["trailer_key"])
                 break
 
-        # Watch providers
+    @staticmethod
+    def _sync_watch_providers(movie, data: dict):
+        from movies.models import WatchProvider
+
         providers_by_country = data.get("watch/providers", {}).get("results", {})
         countries = getattr(settings, "WATCH_PROVIDER_COUNTRIES", [getattr(settings, "DEFAULT_PROVIDER_COUNTRY", "US")])
+        provider_type_map = {"flatrate": "stream", "rent": "rent", "buy": "buy", "free": "free"}
+
         WatchProvider.objects.filter(movie=movie).delete()
         for country in countries:
             providers = providers_by_country.get(country, {})
-            for ptype in ["flatrate", "rent", "buy", "free"]:
-                type_map = {"flatrate": "stream", "rent": "rent", "buy": "buy", "free": "free"}
-                for p in providers.get(ptype, []):
+            for provider_kind in ["flatrate", "rent", "buy", "free"]:
+                for p in providers.get(provider_kind, []):
                     WatchProvider.objects.create(
                         movie=movie,
                         provider_name=p.get("provider_name", ""),
-                        provider_type=type_map[ptype],
+                        provider_type=provider_type_map[provider_kind],
                         logo_path=p.get("logo_path", "") or "",
                         link=providers.get("link", ""),
                         country_code=country,
                     )
+
+    def sync_movie(self, tmdb_id: int):
+        """Syncing a single movie from TMDB to local DB with full details."""
+        data = self.tmdb.get_movie_details(tmdb_id)
+        if isinstance(data, dict) and data.get("_error"):
+            msg = f"TMDB error while syncing movie {tmdb_id}: {data['_error']}"
+            logger.error(msg)
+            raise TMDBAPIError(msg)
+
+        if not data or "id" not in data:
+            msg = f"Movie payload missing or invalid for TMDB ID {tmdb_id}"
+            logger.warning(msg)
+            raise MovieNotFoundError(msg)
+
+        movie = self._upsert_movie(data)
+        self._sync_movie_genres(movie, data)
+        self._sync_movie_people_and_cast(movie, data.get("credits", {}))
+        self._sync_trailer(movie, data)
+        self._sync_watch_providers(movie, data)
 
         logger.info(f"Synced movie: {movie.title}")
         return movie

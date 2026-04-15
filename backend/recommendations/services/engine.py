@@ -5,18 +5,10 @@ from django.conf import settings
 from django.db.models import Avg, Count
 from rest_framework.exceptions import APIException
 from movies.services.tmdb_service import TMDBService
+from .contracts import RecommendationTMDBClient
+from .policies import DefaultInteractionWeightPolicy, InteractionWeightPolicy
 
 logger = logging.getLogger(__name__)
-
-# Interaction weights
-INTERACTION_WEIGHTS = {
-    "like": 5.0,
-    "watched": 3.0,
-    "watchlist": 2.5,
-    "view": 1.0,
-    "search": 0.5,
-    "dislike": -3.0,
-}
 
 PAGINATION_LIMITS = getattr(
     settings,
@@ -33,8 +25,13 @@ PAGINATION_LIMITS = getattr(
 class RecommendationEngine:
     """Class to generate personalized movie recommendations."""
 
-    def __init__(self):
-        self.tmdb = TMDBService()
+    def __init__(
+        self,
+        tmdb_client: RecommendationTMDBClient | None = None,
+        weight_policy: InteractionWeightPolicy | None = None,
+    ):
+        self.tmdb = tmdb_client or TMDBService()
+        self.weight_policy = weight_policy or DefaultInteractionWeightPolicy()
 
     @staticmethod
     def _ensure_tmdb_ok(data: dict, context: str):
@@ -54,7 +51,7 @@ class RecommendationEngine:
         genre_names = {g.tmdb_id: g.name for g in Genre.objects.all()}
 
         for interaction in interactions:
-            w = INTERACTION_WEIGHTS.get(interaction.interaction_type, 1.0)
+            w = self.weight_policy.weight_for(interaction.interaction_type)
             for genre_id in interaction.genre_ids:
                 genre_scores[genre_id] += w
                 genre_interaction_counts[genre_id] += 1

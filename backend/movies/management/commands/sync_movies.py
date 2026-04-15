@@ -9,6 +9,10 @@ from django.core.management.base import BaseCommand
 from movies.services.tmdb_service import MovieSyncService, TMDBAPIError, MovieNotFoundError
 
 
+def get_movie_sync_service() -> MovieSyncService:
+    return MovieSyncService()
+
+
 class Command(BaseCommand):
     help = "Sync movie data from TMDB API"
 
@@ -18,7 +22,7 @@ class Command(BaseCommand):
         parser.add_argument("--movie", type=int, default=0, help="Sync a specific movie by TMDB ID")
 
     def handle(self, *args, **options):
-        service = MovieSyncService()
+        service = get_movie_sync_service()
 
         if options["genres"]:
             self.stdout.write("Syncing genres...")

@@ -1,14 +1,10 @@
-import re
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from .services.validation_policy import RegistrationValidationPolicy
 
 User = get_user_model()
-
-EMAIL_PATTERN = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
-SPECIAL_CHAR_PATTERN = r"[!@#$%^&*()_+\-=\[\]{};':\",.<>?/]"
-
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -26,15 +22,18 @@ class RegisterSerializer(serializers.ModelSerializer):
         model = User
         fields = ["username", "email", "password", "password_confirm"]
 
+    def _get_policy(self) -> RegistrationValidationPolicy:
+        return RegistrationValidationPolicy()
+
     def validate(self, data):
         if data["password"] != data["password_confirm"]:
             raise serializers.ValidationError({"password_confirm": "Passwords don't match."})
 
         password = data.get("password") or ""
-        if not password[:1].isupper():
-            raise serializers.ValidationError({"password": "Password must start with a capital letter."})
-        if not re.search(SPECIAL_CHAR_PATTERN, password):
-            raise serializers.ValidationError({"password": "Password must include at least one special character (e.g. !@#$)."})
+        policy = self._get_policy()
+        password_error = policy.validate_password_rules(password)
+        if password_error:
+            raise serializers.ValidationError({"password": password_error})
         
         # Enforce strong password complexity
         validate_password(data["password"])
@@ -49,8 +48,9 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def validate_email(self, value):
         email = value.strip().lower()
+        policy = self._get_policy()
         # Allow common email forms and any valid suffix such as .org, .edu, .io, etc.
-        if not re.match(EMAIL_PATTERN, email):
+        if not policy.is_valid_email_format(email):
             raise serializers.ValidationError(
                 "Enter a valid email address with a full domain (e.g., name@domain.org)."
             )

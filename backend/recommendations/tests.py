@@ -247,3 +247,42 @@ class RecommendationEngineBoundaryTest(TestCase):
         self.assertEqual(len(movies), 1)
         self.assertEqual(movies[0]["title"], "Action Pick")
         mock_discover.assert_called_once()
+
+
+class RecommendationEnginePolicyInjectionTest(TestCase):
+    """Engine should honor injected interaction-weight policies."""
+
+    class _CustomPolicy:
+        def weight_for(self, interaction_type: str) -> float:
+            if interaction_type == "like":
+                return 10.0
+            if interaction_type == "view":
+                return 1.0
+            return 1.0
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="policyuser", password="pass12345")
+        Genre.objects.create(tmdb_id=28, name="Action", slug="action")
+        Genre.objects.create(tmdb_id=18, name="Drama", slug="drama")
+
+        UserMovieInteraction.objects.create(
+            user=self.user,
+            movie_tmdb_id=11,
+            movie_title="Movie Like",
+            interaction_type="like",
+            genre_ids=[28],
+        )
+        UserMovieInteraction.objects.create(
+            user=self.user,
+            movie_tmdb_id=12,
+            movie_title="Movie View",
+            interaction_type="view",
+            genre_ids=[18],
+        )
+
+    def test_custom_weight_policy_changes_normalized_scores(self):
+        engine = RecommendationEngine(weight_policy=self._CustomPolicy())
+        prefs = dict(engine.compute_genre_preferences(self.user))
+
+        self.assertEqual(prefs[28], 100.0)
+        self.assertEqual(prefs[18], 10.0)

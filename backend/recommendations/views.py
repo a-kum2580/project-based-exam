@@ -18,6 +18,8 @@ from .serializers import (
     WatchlistSerializer,
 )
 from .services.engine import RecommendationEngine
+from .services.policies import DefaultInteractionWeightPolicy
+from movies.services.tmdb_service import TMDBService
 from movies.serializers import TMDBMovieSerializer
 
 MAX_PAGE = 500
@@ -26,7 +28,14 @@ MAX_PAGE = PAGINATION_LIMITS["max_page"]
 
 
 def get_recommendation_engine() -> RecommendationEngine:
-    return RecommendationEngine()
+    return RecommendationEngine(
+        tmdb_client=get_tmdb_service(),
+        weight_policy=DefaultInteractionWeightPolicy(),
+    )
+
+
+def get_tmdb_service() -> TMDBService:
+    return TMDBService()
 
 
 def _parse_page(request, default=1, max_page=MAX_PAGE) -> int:

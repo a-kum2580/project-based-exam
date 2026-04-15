@@ -668,4 +668,54 @@
   - movies router made canonical at `/api/movies/` with legacy `/list/` compatibility routes.
   - password/email regex rules centralized and strengthened with dedicated tests.
   - recommendation genre preference computation optimized using single-pass counters.
+  - `MovieSyncService.sync_movie` decomposed into focused methods (`_upsert_movie`, `_sync_movie_genres`, `_sync_movie_people_and_cast`, `_sync_trailer`, `_sync_watch_providers`) to enforce SRP and reduce method complexity.
+  - recommendation engine now uses dependency inversion with injected TMDB client and pluggable interaction weight policy.
+  - recommendation weighting rules extracted into policy objects (`InteractionWeightPolicy`, `DefaultInteractionWeightPolicy`) to support OCP-style behavior extension.
+
+## OOD Principles Applied (April 2026)
+
+### 1) Single Responsibility Principle (SRP)
+- **Before**: `MovieSyncService.sync_movie` handled payload validation, movie upsert, genres, cast/directors, trailer selection, and provider syncing in one method.
+- **After**: workflow is split into cohesive private methods with one responsibility each.
+- **Files**: `backend/movies/services/tmdb_service.py`
+- **Benefit**: each sync stage is independently testable and safer to evolve.
+
+### 2) Dependency Inversion Principle (DIP)
+- **Before**: `RecommendationEngine` instantiated concrete `TMDBService` internally.
+- **After**: `RecommendationEngine` accepts an injected TMDB client contract and injected interaction-weight policy.
+- **Files**: `backend/recommendations/services/contracts.py`, `backend/recommendations/services/engine.py`, `backend/recommendations/views.py`
+- **Benefit**: domain logic now depends on abstractions and can be composed differently per runtime/test context.
+
+- **Extended coverage**: movie endpoint orchestration now depends on an application service (`MovieCatalogService`) instead of direct TMDB calls in each view function.
+- **Files**: `backend/movies/services/catalog_service.py`, `backend/movies/views.py`
+- **Benefit**: controllers are thinner, external-provider choreography is centralized, and endpoint behavior remains consistent.
+
+### 3) Open/Closed Principle (OCP)
+- **Before**: interaction scoring was a hard-coded constant map inside the engine.
+- **After**: scoring behavior moved behind `InteractionWeightPolicy`, with default implementation `DefaultInteractionWeightPolicy`.
+- **Files**: `backend/recommendations/services/policies.py`, `backend/recommendations/services/engine.py`
+- **Benefit**: new scoring strategies can be introduced without modifying recommendation engine logic.
+
+- **Extended coverage**: user registration rule evaluation is now delegated to `RegistrationValidationPolicy` rather than embedded serializer logic.
+- **Files**: `backend/users/services/validation_policy.py`, `backend/users/serializers.py`
+- **Benefit**: validation policy can evolve independently from transport/serialization concerns.
+
+### 5) Additional OOD Coverage Pass
+- **Movie API orchestration extraction**
+  - Created `MovieCatalogService` to centralize search/trending/top-rated/now-playing/detail/people/mood catalog operations.
+  - Updated movie view endpoints to orchestrate through service provider (`get_movie_catalog_service`) while preserving response contracts.
+  - **Principles improved**: SRP (views focus on HTTP concerns), DIP (views depend on service abstraction boundary), DRY (shared orchestration path).
+  - Composition root consistency: recommendation and movie flows now both use explicit service provider functions for dependency construction.
+
+- **User registration policy extraction**
+  - Created `RegistrationValidationPolicy` and moved password/email rule logic out of serializer.
+  - Serializer now coordinates policy + Django validator invocation rather than implementing raw regex checks directly.
+  - **Principles improved**: SRP (serializer as transport mapper), OCP (new policy rules can be added in policy class).
+
+### 4) Validation Evidence
+- `python manage.py test movies recommendations users` -> **PASS (55 tests)**
+- Added focused test: injected custom weight policy changes normalized preference outcome.
+- **File**: `backend/recommendations/tests.py`
+- Re-ran after broader movies/users OOD refactor pass: **PASS (55 tests)**.
+- Re-ran after final composition-root consistency updates (recommendations view + sync command): **PASS (55 tests)**.
 

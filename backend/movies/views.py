@@ -15,6 +15,7 @@ from .serializers import (
     TMDBMovieSerializer,
 )
 from .services.discovery_service import MovieDiscoveryService
+from .services.catalog_service import MovieCatalogService
 from .services.tmdb_service import (
     TMDBService,
     MovieSyncService,
@@ -22,7 +23,6 @@ from .services.tmdb_service import (
     TMDBAPIError,
     MovieNotFoundError,
 )
-from .config.moods import MOOD_MAP
 from .utils.query_params import RequestParams
 
 logger = logging.getLogger(__name__)
@@ -40,6 +40,14 @@ def get_movie_sync_service(tmdb_service: TMDBService | None = None) -> MovieSync
 
 def get_discovery_service(tmdb_service: TMDBService) -> MovieDiscoveryService:
     return MovieDiscoveryService(tmdb_client=tmdb_service, cache_ttl=300, max_scan_pages=MAX_PAGE)
+
+
+def get_movie_catalog_service(tmdb_service: TMDBService | None = None) -> MovieCatalogService:
+    resolved_tmdb = tmdb_service or get_tmdb_service()
+    return MovieCatalogService(
+        tmdb_client=resolved_tmdb,
+        sync_service=get_movie_sync_service(tmdb_service=resolved_tmdb),
+    )
 
 
 def _ensure_tmdb_ok(data: dict, request=None, context: str = "") -> None:
@@ -97,8 +105,8 @@ class MovieViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=["get"])
     def recommendations(self, request, pk=None):
         movie = self.get_object()
-        tmdb_service = get_tmdb_service()
-        data = tmdb_service.get_movie_recommendations(movie.tmdb_id)
+        catalog_service = get_movie_catalog_service()
+        data = catalog_service.get_movie_recommendations(movie.tmdb_id)
         _ensure_tmdb_ok(data, request=request, context="movie_recommendations")
         results = data.get("results", [])
         serializer = TMDBMovieSerializer(results, many=True)
@@ -107,8 +115,8 @@ class MovieViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=["get"])
     def similar(self, request, pk=None):
         movie = self.get_object()
-        tmdb_service = get_tmdb_service()
-        data = tmdb_service.get_similar_movies(movie.tmdb_id)
+        catalog_service = get_movie_catalog_service()
+        data = catalog_service.get_similar_movies(movie.tmdb_id)
         _ensure_tmdb_ok(data, request=request, context="movie_similar")
         results = data.get("results", [])
         serializer = TMDBMovieSerializer(results, many=True)
@@ -147,8 +155,8 @@ class GenreViewSet(viewsets.ReadOnlyModelViewSet):
             return self.get_paginated_response(serializer.data)
 
         # Fallback to TMDB API
-        tmdb_service = get_tmdb_service()
-        data = tmdb_service.get_movies_by_genre(genre.tmdb_id, page=page, sort_by=sort)
+        catalog_service = get_movie_catalog_service()
+        data = catalog_service.get_movies_by_genre(genre.tmdb_id, page=page, sort=sort)
         _ensure_tmdb_ok(data, request=request, context="movies_by_genre")
         results = data.get("results", [])
         serializer = TMDBMovieSerializer(results, many=True)
@@ -202,7 +210,8 @@ def search_movies(request) -> Response:
         return error_response("Query parameter 'q' is required", status.HTTP_400_BAD_REQUEST)
 
     tmdb_service = get_tmdb_service()
-    data = tmdb_service.search_movies(query, page=page)
+    catalog_service = get_movie_catalog_service(tmdb_service=tmdb_service)
+    data = catalog_service.search_movies(query, page=page)
     _ensure_tmdb_ok(data, request=request, context="search_movies")
     results = data.get("results", [])
     serializer = TMDBMovieSerializer(results, many=True)
@@ -223,8 +232,8 @@ def trending_movies(request) -> Response:
     window = params.text("window", "week")
     page = params.page(max_page=MAX_PAGE)
 
-    tmdb_service = get_tmdb_service()
-    data = tmdb_service.get_trending_movies(time_window=window, page=page)
+    catalog_service = get_movie_catalog_service()
+    data = catalog_service.get_trending_movies(window=window, page=page)
     _ensure_tmdb_ok(data, request=request, context="trending_movies")
     results = data.get("results", [])
     serializer = TMDBMovieSerializer(results, many=True)
@@ -241,8 +250,8 @@ def trending_movies(request) -> Response:
 def now_playing(request) -> Response:
     params = RequestParams(request.query_params)
     page = params.page(max_page=MAX_PAGE)
-    tmdb_service = get_tmdb_service()
-    data = tmdb_service.get_now_playing(page=page)
+    catalog_service = get_movie_catalog_service()
+    data = catalog_service.get_now_playing(page=page)
     _ensure_tmdb_ok(data, request=request, context="now_playing")
     results = data.get("results", [])
     serializer = TMDBMovieSerializer(results, many=True)
@@ -254,8 +263,8 @@ def now_playing(request) -> Response:
 def top_rated(request) -> Response:
     params = RequestParams(request.query_params)
     page = params.page(max_page=MAX_PAGE)
-    tmdb_service = get_tmdb_service()
-    data = tmdb_service.get_top_rated_movies(page=page)
+    catalog_service = get_movie_catalog_service()
+    data = catalog_service.get_top_rated(page=page)
     _ensure_tmdb_ok(data, request=request, context="top_rated")
     results = data.get("results", [])
     serializer = TMDBMovieSerializer(results, many=True)
@@ -268,11 +277,11 @@ def movie_detail_tmdb(request, tmdb_id) -> Response:
 
     sync = request.query_params.get("sync", "false").lower() == "true"
     tmdb_service = get_tmdb_service()
-    sync_service = get_movie_sync_service(tmdb_service=tmdb_service)
+    catalog_service = get_movie_catalog_service(tmdb_service=tmdb_service)
 
     if sync:
         try:
-            movie = sync_service.sync_movie(tmdb_id)
+            movie = catalog_service.sync_movie(tmdb_id)
             serializer = MovieDetailSerializer(movie, context={"request": request})
             return Response(serializer.data)
         except MovieNotFoundError as exc:
@@ -280,7 +289,7 @@ def movie_detail_tmdb(request, tmdb_id) -> Response:
         except TMDBAPIError as exc:
             raise APIException(detail=str(exc))
 
-    data = tmdb_service.get_movie_details(tmdb_id)
+    data = catalog_service.get_movie_details(tmdb_id)
     _ensure_tmdb_ok(data, request=request, context="movie_detail")
     if not data:
         return error_response("Movie not found", status.HTTP_404_NOT_FOUND)
@@ -296,42 +305,28 @@ def search_people(request) -> Response:
     if not query:
         return error_response("Query parameter 'q' is required", status.HTTP_400_BAD_REQUEST)
 
-    tmdb_service = get_tmdb_service()
-    data = tmdb_service.search_people(query)
+    catalog_service = get_movie_catalog_service()
+    data = catalog_service.search_people(query)
     _ensure_tmdb_ok(data, request=request, context="search_people")
     return Response(data)
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def mood_list(request) -> Response:
-    moods = [
-        {"slug": slug, "label": m["label"], "description": m["description"]}
-        for slug, m in MOOD_MAP.items()
-    ]
+    catalog_service = get_movie_catalog_service()
+    moods = catalog_service.list_moods()
     return Response(moods)
 
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def mood_movies(request, mood_slug: str) -> Response:
-    mood = MOOD_MAP.get(mood_slug)
-    if not mood:
-        return error_response("Unknown mood", status.HTTP_404_NOT_FOUND)
-
     params_parser = RequestParams(request.query_params)
     page = params_parser.page(max_page=MAX_PAGE)
-    params = {
-        "with_genres": mood["genres"],
-        "sort_by": mood.get("sort_by", "popularity.desc"),
-        "page": page,
-    }
-    if "vote_count_gte" in mood:
-        params["vote_count.gte"] = mood["vote_count_gte"]
-    if "vote_average_gte" in mood:
-        params["vote_average.gte"] = mood["vote_average_gte"]
-
-    tmdb_service = get_tmdb_service()
-    data = tmdb_service.discover_movies(**params)
+    catalog_service = get_movie_catalog_service()
+    mood, data = catalog_service.discover_mood_movies(mood_slug=mood_slug, page=page)
+    if not mood:
+        return error_response("Unknown mood", status.HTTP_404_NOT_FOUND)
     _ensure_tmdb_ok(data, request=request, context="mood_movies")
     results = data.get("results", [])
     serializer = TMDBMovieSerializer(results, many=True)
@@ -378,10 +373,10 @@ def compare_movies(request) -> Response:
     if len(ids) < compare_limit:
         return error_response(f"Provide at least {compare_limit} TMDB IDs: ?ids=550,680", status.HTTP_400_BAD_REQUEST)
 
+    catalog_service = get_movie_catalog_service()
     movies = []
-    tmdb_service = get_tmdb_service()
     for tmdb_id in ids[:compare_limit]:
-        data = tmdb_service.get_movie_details(tmdb_id)
+        data = catalog_service.get_movie_details(tmdb_id)
         _ensure_tmdb_ok(data, request=request, context="compare_movies")
         if data and "id" in data:
             movies.append(data)
