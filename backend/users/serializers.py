@@ -3,7 +3,6 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from django.core.validators import RegexValidator
 
 User = get_user_model()
 
@@ -16,14 +15,7 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(
-        validators=[
-            RegexValidator(
-                regex=r"^[\w\.-]+@[\w\.-]+\.\w+$",
-                message="Enter a valid email address with a domain (e.g., @gmail.com)."
-            )
-        ]
-    )
+    email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=8)
     password_confirm = serializers.CharField(write_only=True)
 
@@ -53,7 +45,15 @@ class RegisterSerializer(serializers.ModelSerializer):
         return username
 
     def validate_email(self, value):
-        return value.strip().lower()
+        email = value.strip().lower()
+        # Allow common email forms and any valid suffix such as .org, .edu, .io, etc.
+        if not re.match(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$", email):
+            raise serializers.ValidationError(
+                "Enter a valid email address with a full domain (e.g., name@domain.org)."
+            )
+        if User.objects.filter(email__iexact=email).exists():
+            raise serializers.ValidationError("A user with that email already exists.")
+        return email
 
     def create(self, validated_data):
         validated_data.pop("password_confirm")

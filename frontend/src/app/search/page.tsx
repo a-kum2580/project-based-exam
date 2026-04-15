@@ -65,6 +65,7 @@ function SearchContent() {
 
   useEffect(() => {
     if (initialQuery) {
+      resetFiltersForNewSearch();
       performSearch(initialQuery, 1);
     } else if (sortParam) {
       loadCategory(sortParam, 1);
@@ -72,6 +73,10 @@ function SearchContent() {
       loadCategory("trending", 1);
     }
   }, [initialQuery, sortParam]);
+
+  useEffect(() => {
+    setQuery(initialQuery);
+  }, [initialQuery]);
 
   async function performSearch(q: string, p: number) {
     if (!q.trim()) return;
@@ -118,6 +123,7 @@ function SearchContent() {
         sort: filterSort,
         page: p,
       };
+      if (currentSearchQuery) params.q = currentSearchQuery;
       if (filterGenre) params.genre = filterGenre;
       if (filterYearFrom) params.year_from = filterYearFrom;
       if (filterYearTo) params.year_to = filterYearTo;
@@ -150,9 +156,24 @@ function SearchContent() {
     setFilterSort("popularity.desc");
   }
 
+  function handleClearFilters() {
+    clearFilters();
+    if (currentSearchQuery) {
+      performSearch(currentSearchQuery, 1);
+    } else {
+      loadCategory(sortParam || "trending", 1);
+    }
+  }
+
+  function resetFiltersForNewSearch() {
+    clearFilters();
+    setFiltersOpen(false);
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (query.trim()) {
+      resetFiltersForNewSearch();
       performSearch(query, 1);
     }
   }
@@ -165,6 +186,11 @@ function SearchContent() {
     } else {
       loadCategory(sortParam || "trending", newPage);
     }
+  }
+
+  function handleApplyFilters() {
+    setFiltersOpen(false);
+    applyFilters(1);
   }
 
   const categoryLabels: Record<string, string> = {
@@ -190,8 +216,7 @@ function SearchContent() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search movies, directors, actors..."
-            className="w-full h-14 pr-5 rounded-2xl bg-surface-2 border border-white/[0.08] text-white placeholder:text-white/25 outline-none focus:border-gold/40 focus:ring-1 focus:ring-gold/20 transition-all text-lg font-body"
-            style={{ paddingLeft: "3.25rem" }}
+            className="w-full h-14 pl-[3.25rem] pr-5 rounded-2xl bg-surface-2 border border-white/[0.08] text-white placeholder:text-white/25 outline-none focus:border-gold/40 focus:ring-1 focus:ring-gold/20 transition-all text-lg font-body"
           />
         </div>
       </form>
@@ -227,6 +252,7 @@ function SearchContent() {
               <select
                 value={filterGenre}
                 onChange={(e) => setFilterGenre(e.target.value)}
+                title="Genre"
                 className="w-full h-10 px-3 rounded-xl bg-surface-2 border border-white/[0.08] text-white text-sm outline-none focus:border-gold/30 transition-colors appearance-none cursor-pointer"
               >
                 <option value="">All Genres</option>
@@ -270,6 +296,7 @@ function SearchContent() {
                 type="range"
                 value={filterRating || "0"}
                 onChange={(e) => setFilterRating(e.target.value === "0" ? "" : e.target.value)}
+                title="Minimum rating"
                 min="0"
                 max="9"
                 step="0.5"
@@ -283,6 +310,7 @@ function SearchContent() {
               <select
                 value={filterLanguage}
                 onChange={(e) => setFilterLanguage(e.target.value)}
+                title="Language"
                 className="w-full h-10 px-3 rounded-xl bg-surface-2 border border-white/[0.08] text-white text-sm outline-none focus:border-gold/30 transition-colors appearance-none cursor-pointer"
               >
                 {LANGUAGES.map((l) => (
@@ -320,6 +348,7 @@ function SearchContent() {
               <select
                 value={filterSort}
                 onChange={(e) => setFilterSort(e.target.value)}
+                title="Sort by"
                 className="w-full h-10 px-3 rounded-xl bg-surface-2 border border-white/[0.08] text-white text-sm outline-none focus:border-gold/30 transition-colors appearance-none cursor-pointer"
               >
                 {SORT_OPTIONS.map((s) => (
@@ -332,14 +361,14 @@ function SearchContent() {
           {/* Filter actions */}
           <div className="flex items-center gap-3 pt-3 border-t border-white/[0.04]">
             <button
-              onClick={() => applyFilters(1)}
+              onClick={handleApplyFilters}
               className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-gold to-gold-dim text-surface-0 font-semibold text-sm hover:shadow-lg hover:shadow-gold/15 transition-all"
             >
               Apply Filters
             </button>
             {hasActiveFilters && (
               <button
-                onClick={clearFilters}
+                onClick={handleClearFilters}
                 className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl glass text-sm text-white/50 hover:text-white transition-colors"
               >
                 <X className="w-3.5 h-3.5" />
@@ -374,6 +403,13 @@ function SearchContent() {
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-3 mt-12">
               <button
+                onClick={() => handlePageChange(1)}
+                disabled={page <= 1}
+                className="px-5 py-2.5 rounded-xl glass-card text-sm font-medium disabled:opacity-20 hover:border-gold/15 transition-all"
+              >
+                First
+              </button>
+              <button
                 onClick={() => handlePageChange(page - 1)}
                 disabled={page <= 1}
                 className="px-5 py-2.5 rounded-xl glass-card text-sm font-medium disabled:opacity-20 hover:border-gold/15 transition-all"
@@ -389,6 +425,13 @@ function SearchContent() {
                 className="px-5 py-2.5 rounded-xl glass-card text-sm font-medium disabled:opacity-20 hover:border-gold/15 transition-all"
               >
                 Next
+              </button>
+              <button
+                onClick={() => handlePageChange(Math.min(totalPages, 500))}
+                disabled={page >= Math.min(totalPages, 500)}
+                className="px-5 py-2.5 rounded-xl glass-card text-sm font-medium disabled:opacity-20 hover:border-gold/15 transition-all"
+              >
+                Last
               </button>
             </div>
           )}

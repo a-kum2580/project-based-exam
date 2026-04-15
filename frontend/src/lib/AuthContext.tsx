@@ -28,6 +28,23 @@ export function useAuth() {
   return useContext(AuthContext);
 }
 
+function toTitleCaseUsername(value: string) {
+  return value
+    .split(/([_\-\s]+)/)
+    .map((part) => {
+      if (/^[_\-\s]+$/.test(part) || !part) return part;
+      return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+    })
+    .join("");
+}
+
+function normalizeUserProfile(user: User): User {
+  return {
+    ...user,
+    username: toTitleCaseUsername(user.username || ""),
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       loadTokens();
       const profile = await authAPI.getProfile();
-      setUser(profile);
+      setUser(normalizeUserProfile(profile));
     } catch {
       setUser(null);
     }

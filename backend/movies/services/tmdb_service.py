@@ -58,6 +58,14 @@ class TMDBService:
             {"append_to_response": "credits,videos,recommendations,similar,watch/providers"},
         )
 
+    def get_movie_runtime(self, tmdb_id: int) -> Optional[int]:
+        """Fetch only what is needed for runtime filtering."""
+        data = self._get(f"movie/{tmdb_id}", {}, ttl=CACHE_TTL_MEDIUM)
+        if isinstance(data, dict) and data.get("_error"):
+            return None
+        runtime = data.get("runtime") if isinstance(data, dict) else None
+        return runtime if isinstance(runtime, int) else None
+
     def get_trending_movies(self, time_window: str = "week", page: int = 1) -> dict:
         """getting  trending movies (day or week)."""
         return self._get(f"trending/movie/{time_window}", {"page": page}, ttl=CACHE_TTL_SHORT)

@@ -8,6 +8,11 @@ export const metadata: Metadata = {
   title: "CineQuest: Discover Your Next Favorite Movie",
   description:
     "Cinematic movie recommendations based on your taste. Explore genres, directors, and discover hidden gems.",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
+  },
 };
 
 export default function RootLayout({
