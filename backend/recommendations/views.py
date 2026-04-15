@@ -20,6 +20,7 @@ from .serializers import (
 from .services.engine import RecommendationEngine
 from .services.policies import DefaultInteractionWeightPolicy
 from movies.services.tmdb_service import TMDBService
+from cinequest.utils.param_parser import ParamParser
 from movies.serializers import TMDBMovieSerializer
 
 MAX_PAGE = 500
@@ -40,13 +41,7 @@ def get_tmdb_service() -> TMDBService:
 
 def _parse_page(request, default=1, max_page=MAX_PAGE) -> int:
     """Parse a positive int `page` query param."""
-    try:
-        page = int(request.query_params.get("page", default))
-        if page <= 0:
-            return default
-        return min(page, max_page)
-    except (TypeError, ValueError):
-        return default
+    return ParamParser.safe_page(request.query_params.get("page", default), default=default, max_page=max_page)
 
 
 def _build_genre_distribution(interactions_qs, limit=10) -> list[dict[str, Any]]:

@@ -2,6 +2,8 @@ from typing import Any
 
 from django.core.cache import cache
 from rest_framework.exceptions import APIException
+from cinequest.utils.param_parser import ParamParser
+from cinequest.utils.error_validator import TMDBErrorValidator
 
 
 class MovieDiscoveryService:
@@ -23,24 +25,7 @@ class MovieDiscoveryService:
         self.result_buffer_multiplier = result_buffer_multiplier
         self.max_consecutive_empty_pages = max_consecutive_empty_pages
 
-    @staticmethod
-    def _safe_int(value: Any, default: int | None = 1) -> int | None:
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return default
 
-    @staticmethod
-    def _safe_float(value: Any, default: float | None = None) -> float | None:
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return default
-
-    @staticmethod
-    def _ensure_tmdb_ok(data: dict):
-        if isinstance(data, dict) and data.get("_error"):
-            raise APIException(detail=data["_error"])
 
     @staticmethod
     def _build_cache_key(payload: dict) -> str:
@@ -66,7 +51,7 @@ class MovieDiscoveryService:
         }
 
     def _sanitize_page(self, value: Any, default: int = 1) -> int:
-        page = self._safe_int(value, default=default)
+        page = ParamParser.safe_int(value, default=default)
         if page is None or page < 1:
             return default
         return min(page, self.max_scan_pages)
@@ -74,7 +59,8 @@ class MovieDiscoveryService:
     def discover(self, filters: dict) -> dict:
         if filters["q"]:
             return self._discover_with_query(filters)
-        return self._discover_without_query(filters)
+        else:
+            return self._discover_without_query(filters)
 
     def _discover_with_query(self, filters: dict) -> dict:
         cache_payload = {
@@ -96,9 +82,9 @@ class MovieDiscoveryService:
             page_size = cached_filtered.get("page_size", 20)
         else:
             first_page_data = self.tmdb.search_movies(filters["q"], page=1)
-            self._ensure_tmdb_ok(first_page_data)
+            TMDBErrorValidator.ensure_ok(first_page_data)
 
-            total_search_pages = self._safe_int(first_page_data.get("total_pages", 1), default=1) or 1
+            total_search_pages = ParamParser.safe_int(first_page_data.get("total_pages", 1), default=1) or 1
             max_scan_pages = min(total_search_pages, self.max_scan_pages)
 
             first_page_results = list(first_page_data.get("results", []))
@@ -120,7 +106,7 @@ class MovieDiscoveryService:
                     break
 
                 page_data = self.tmdb.search_movies(filters["q"], page=scan_page)
-                self._ensure_tmdb_ok(page_data)
+                TMDBErrorValidator.ensure_ok(page_data)
                 page_results = page_data.get("results", [])
                 if not page_results:
                     break
@@ -241,3 +227,17 @@ class MovieDiscoveryService:
         }
         if sort in sort_map:
             movies.sort(key=sort_map[sort], reverse=not sort.endswith(".asc"))
+
+    @staticmethod
+    def _safe_int(value: Any, default: int = 0) -> int:
+        try:
+            return int(value) if value is not None else default
+        except (ValueError, TypeError):
+            return default
+
+    @staticmethod
+    def _safe_float(value: Any, default: float = 0.0) -> float:
+        try:
+            return float(value) if value is not None else default
+        except (ValueError, TypeError):
+            return default

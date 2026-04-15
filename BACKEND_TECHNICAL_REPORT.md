@@ -99,46 +99,87 @@
         - Centralizes type-safe parsing for `page`, `year_from`, `year_to`, `rating_min`, `runtime_min`, `runtime_max`.
 
       2. `discover(filters)`
-        - Entry point deciding between two branches:
-          - query-aware branch (`_discover_with_query`) when `q` is present
-          - discover API branch (`_discover_without_query`) when `q` is absent
+        - Entry point router that decides between two branches based on whether a search query is present:
+          - calls `_discover_with_query(filters)` when `q` is present (search mode)
+          - calls `_discover_without_query(filters)` when `q` is absent (browse mode via TMDB discover endpoint)
 
       3. `_discover_with_query(filters)`
-        - Builds cache payload from filter options.
-        - Reads/writes cached filtered results.
-        - Fetches and aggregates TMDB search pages when cache miss occurs.
-        - Delegates filtering to `_apply_search_filters` and sorting to `_sort_movies`.
-        - Performs final pagination and returns structured payload.
+        - Implements search-based movie discovery with caching and adaptive page scanning.
+        - Builds a deterministic cache key from all filter parameters using `_build_cache_key()`.
+        - On cache hit: retrieves pre-filtered results and page size from cache.
+        - On cache miss:
+          - Fetches first TMDB search page (page 1).
+          - Validates TMDB response with `TMDBErrorValidator.ensure_ok()` to raise `APIException` on error.
+          - Calculates target result count using `_target_result_count()` with `result_buffer_multiplier`.
+          - Applies initial filters to first page via `_apply_search_filters()`.
+          - Iteratively scans subsequent pages (up to `max_scan_pages`) and applies filters:
+            - Tracks consecutive empty-page count (pages that yield zero filtered results).
+            - Stops iteration when `_should_stop_scan()` returns true (either target reached or `max_consecutive_empty_pages` exceeded).
+          - Sorts accumulated filtered results using `_sort_movies()`.
+          - Caches the entire filtered list with TTL for future queries.
+        - Returns paginated slice of results at requested page, along with total count and total pages.
 
       4. `_discover_without_query(filters)`
-        - Builds TMDB discover API params from filters.
-        - Calls TMDB discover endpoint directly.
-        - Returns normalized response payload (results/total/pages).
+        - Implements browse-based discovery using TMDB's official discover endpoint.
+        - Translates internal filter keys to TMDB API parameters:
+          - `genre` → `with_genres`
+          - `year_from` / `year_to` → `primary_release_date.gte` / `.lte`
+          - `rating_min` → `vote_average.gte` (with `vote_count.gte=50` to filter low-sample ratings)
+          - `runtime_min` / `runtime_max` → `with_runtime.gte` / `.lte`
+          - `language` → `with_original_language`
+          - `sort` → `sort_by`
+        - Calls `self.tmdb.discover_movies(**params)` with page number baked in.
+        - Returns normalized response with result list, pagination metadata, and query context.
 
       5. `_apply_search_filters(all_results, filters)`
-        - Applies in-memory filters in one place:
-          - genre match
-          - year range
-          - minimum rating
-          - language
-          - optional runtime constraints (with runtime lookups)
+        - Performs in-memory filtering of a batch of movies (typically from one TMDB search page).
+        - Applies all applicable filters in sequence:
+          - **Genre**: if filter present, ensures movie's `genre_ids` set contains the filter genre ID.
+          - **Year range**: parses `release_date` year and validates against `year_from` and `year_to` bounds.
+          - **Rating**: compares `vote_average` against `rating_min`.
+          - **Language**: matches `original_language` exactly.
+          - **Runtime**: if runtime filters present, fetches runtime via `self.tmdb.get_movie_runtime(movie_id)` per movie and validates bounds.
+        - Returns filtered list (subset of input).
 
       6. `_sort_movies(movies, sort)`
-        - Encapsulates sorting strategy map and ordering rules.
+        - Applies sorting strategy determined by `sort` parameter.
+        - Supports sort keys:
+          - `"popularity.desc"`: descending by popularity score
+          - `"vote_average.desc"`: descending by vote average
+          - `"primary_release_date.desc"`: descending by release date (newest first)
+          - `"primary_release_date.asc"`: ascending by release date (oldest first)
+        - Sorts in-place; no return value.
 
-      7. Internal helpers
-        - `_safe_int` / `_safe_float`: consistent numeric parsing
-        - `_ensure_tmdb_ok`: consistent TMDB error propagation (`APIException`)
-        - `_build_cache_key`: deterministic cache key from sorted serialized payload
+      7. Pagination helpers
+        - `_target_result_count(requested_page, page_size)`: returns target min buffer size to collect before stopping scan.
+          - Calculates base needed = `requested_page * page_size`.
+          - Applies multiplier = `base_needed * result_buffer_multiplier` (default 2.0x).
+          - Returns max of both to avoid premature stopping.
+        - `_should_stop_scan(current_count, target_count, empty_pages)`: returns boolean stop decision.
+          - Stops if `current_count >= target_count` (target satisfied).
+          - Stops if `empty_pages >= max_consecutive_empty_pages` (diminishing returns).
+          - Otherwise continues scanning.
+
+      8. Type-safe parsing helpers
+        - `_safe_int(value, default)`: converts value to int, returns default on error (None, ValueError, TypeError).
+        - `_safe_float(value, default)`: converts value to float, returns default on error.
+        - Used in `parse_request_filters()` and throughout filter application to prevent crashes on malformed input.
+
+      9. Cache utility
+        - `_build_cache_key(payload)`: generates deterministic cache key from filter dict.
+          - Serializes payload to JSON with sorted keys.
+          - Computes MD5 hash of serialized bytes.
+          - Returns key prefixed with `"advanced-filter:"`.
+        - Ensures same filter combinations always map to same cache entry, regardless of evaluation order.
 
       #### View-layer changes made
 
       `discover_filtered` in `backend/movies/views.py` now has a narrow role:
-      - sync service TMDB client reference
-      - parse filters via service
-      - call service discovery entry point
-      - serialize TMDB movie list
-      - return final response
+      - resolve TMDB service via `get_discovery_service()` provider
+      - parse filters via `service.parse_request_filters(request.query_params)`
+      - call `service.discover(filters)` to get paginated results
+      - serialize result movies via `MovieDiscoverySerializer`
+      - return final DRF `Response`
 
       This reduced the endpoint from a large, multi-concern block to a compact orchestrator while keeping external API behavior and response keys intact.
 
@@ -148,6 +189,7 @@
       - **Better testability**: each method can be tested independently with focused fixtures/mocks.
       - **Clear ownership**: views manage HTTP lifecycle; service manages discovery domain logic.
       - **Easier extension**: adding new filters now involves extending parser + filter method rather than editing one very long function.
+      - **Adaptive efficiency**: early-stop logic prevents wasteful scanning while maintaining recall for paginated requests.
 
 2. **Linear Scan of 500 TMDB Pages**
    - **Location**: `backend/movies/services/discovery_service.py` (`_discover_with_query`)
