@@ -26,6 +26,34 @@ from movies.serializers import TMDBMovieSerializer
 PAGINATION_LIMITS = getattr(settings, "PAGINATION_LIMITS", {"max_page": 500, "recent_interactions": 10})
 MAX_PAGE = PAGINATION_LIMITS["max_page"]
 
+TMDB_GENRE_NAME_MAP = {
+    28: "Action",
+    12: "Adventure",
+    16: "Animation",
+    35: "Comedy",
+    80: "Crime",
+    99: "Documentary",
+    18: "Drama",
+    10751: "Family",
+    14: "Fantasy",
+    36: "History",
+    27: "Horror",
+    10402: "Music",
+    9648: "Mystery",
+    10749: "Romance",
+    878: "Science Fiction",
+    10770: "TV Movie",
+    53: "Thriller",
+    10752: "War",
+    37: "Western",
+}
+
+
+def _resolve_genre_name(genre_id: int, local_map: dict[int, str] | None = None) -> str:
+    if local_map and genre_id in local_map:
+        return local_map[genre_id]
+    return TMDB_GENRE_NAME_MAP.get(genre_id, f"Genre {genre_id}")
+
 
 def get_recommendation_engine() -> RecommendationEngine:
     return RecommendationEngine(
@@ -57,7 +85,7 @@ def _build_genre_distribution(interactions_qs, limit=10) -> list[dict[str, Any]]
 
     genre_name_map = {g.tmdb_id: g.name for g in Genre.objects.all()}
     return [
-        {"name": genre_name_map.get(gid, f"Genre {gid}"), "tmdb_id": gid, "count": count}
+        {"name": _resolve_genre_name(gid, genre_name_map), "tmdb_id": gid, "count": count}
         for gid, count in genre_counter.most_common(limit)
     ]
 
@@ -77,9 +105,19 @@ def _build_activity_timeline(interactions_qs, days=30) -> list[dict[str, Any]]:
 
 def _build_preference_scores(user, engine, limit=10) -> list[dict[str, Any]]:
     """Compute and return top-N saved preference scores for the user."""
+    from movies.models import Genre
+
     engine.compute_genre_preferences(user)
     prefs = UserGenrePreference.objects.filter(user=user).order_by("-weight")[:limit]
-    return [{"name": p.genre_name, "weight": round(p.weight, 1), "count": p.interaction_count} for p in prefs]
+    genre_name_map = {g.tmdb_id: g.name for g in Genre.objects.all()}
+    return [
+        {
+            "name": _resolve_genre_name(p.genre_tmdb_id, genre_name_map),
+            "weight": round(p.weight, 1),
+            "count": p.interaction_count,
+        }
+        for p in prefs
+    ]
 
 
 def _serialize_movie_map(movie_map: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:

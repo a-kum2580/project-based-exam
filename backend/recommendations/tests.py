@@ -237,6 +237,26 @@ class DashboardAPITest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data["liked_movies"]), 1)
 
+    def test_dashboard_genre_ids_are_resolved_to_names(self):
+        UserMovieInteraction.objects.create(
+            user=self.user,
+            movie_tmdb_id=321,
+            movie_title="Genre Mapping Movie",
+            interaction_type="like",
+            genre_ids=[18, 80],
+        )
+
+        response = self.client.get("/api/recommendations/dashboard/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        genre_names = {item["name"] for item in response.data["genre_distribution"]}
+        pref_names = {item["name"] for item in response.data["preference_scores"]}
+
+        self.assertIn("Drama", genre_names)
+        self.assertIn("Crime", genre_names)
+        self.assertIn("Drama", pref_names)
+        self.assertIn("Crime", pref_names)
+
 
 class BecauseYouWatchedAPITest(APITestCase):
     """Tests for the because-you-watched endpoint response shaping."""
