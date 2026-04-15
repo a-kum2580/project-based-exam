@@ -5,7 +5,7 @@ import '@testing-library/jest-dom';
 // Mock Next.js Image and Link components
 jest.mock('next/image', () => ({
   __esModule: true,
-  default: (props: any) => <img {...props} priority={undefined} />,
+  default: ({ fill, unoptimized, priority, ...props }: any) => <img {...props} />,
 }));
 
 jest.mock('next/link', () => ({
