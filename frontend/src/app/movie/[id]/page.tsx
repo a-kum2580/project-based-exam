@@ -62,6 +62,7 @@ export default function MovieDetailPage() {
   const [isLiked, setIsLiked] = useState(false);
   const [isDisliked, setIsDisliked] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
+  const [watchlistItemId, setWatchlistItemId] = useState<number | null>(null);
   const [likeCount, setLikeCount] = useState(0);
 
   // Initializing like/bookmark state
@@ -74,7 +75,22 @@ export default function MovieDetailPage() {
     setIsDisliked(likedEntry?.type === "dislike");
     setIsBookmarked(watchlist.some((m: any) => m.id === tmdbId));
     setLikeCount(liked.filter((m: any) => m.type === "like").length);
-  }, [tmdbId]);
+
+    async function syncWatchlistStatusFromBackend() {
+      if (!isAuthenticated) return;
+      try {
+        const payload: any = await recommendationsAPI.getWatchlist();
+        const items = Array.isArray(payload) ? payload : payload?.results || [];
+        const matched = items.find((item: any) => item.movie_tmdb_id === tmdbId);
+        setIsBookmarked(!!matched);
+        setWatchlistItemId(matched?.id ?? null);
+      } catch {
+        // Keep local fallback state when backend fetch fails.
+      }
+    }
+
+    syncWatchlistStatusFromBackend();
+  }, [tmdbId, isAuthenticated]);
 
   // Fetching movie data plus recommendations
   useEffect(() => {
@@ -228,12 +244,33 @@ export default function MovieDetailPage() {
     }
   }, [tmdbId, isDisliked, movie, isAuthenticated]);
 
-  const handleBookmark = useCallback(() => {
+  const handleBookmark = useCallback(async () => {
     const watchlist = getWatchlist();
 
     if (isBookmarked) {
       saveWatchlist(watchlist.filter((m: any) => m.id !== tmdbId));
       setIsBookmarked(false);
+      if (isAuthenticated) {
+        try {
+          if (watchlistItemId) {
+            await recommendationsAPI.removeFromWatchlist(watchlistItemId);
+          } else {
+            const payload: any = await recommendationsAPI.getWatchlist();
+            const items = Array.isArray(payload) ? payload : payload?.results || [];
+            const matched = items.find((item: any) => item.movie_tmdb_id === tmdbId);
+            if (matched?.id) {
+              await recommendationsAPI.removeFromWatchlist(matched.id);
+            }
+          }
+          await recommendationsAPI.untrackInteraction({
+            movie_tmdb_id: tmdbId,
+            interaction_type: "watchlist",
+          });
+        } catch (err) {
+          console.error("Failed to remove watchlist item:", err);
+        }
+      }
+      setWatchlistItemId(null);
     } else {
       watchlist.push({
         id: tmdbId,
@@ -243,8 +280,27 @@ export default function MovieDetailPage() {
       });
       saveWatchlist(watchlist);
       setIsBookmarked(true);
+      if (isAuthenticated && movie) {
+        try {
+          const created: any = await recommendationsAPI.addToWatchlist({
+            movie_tmdb_id: tmdbId,
+            movie_title: movie.title || "",
+            poster_path: movie.poster_path || "",
+          });
+          setWatchlistItemId(created?.id ?? null);
+          const genreIds = (movie.genres || []).map((g: any) => g.tmdb_id ?? g.id).filter(Boolean);
+          await recommendationsAPI.trackInteraction({
+            movie_tmdb_id: tmdbId,
+            movie_title: movie.title || "",
+            interaction_type: "watchlist",
+            genre_ids: genreIds,
+          });
+        } catch (err) {
+          console.error("Failed to persist watchlist item:", err);
+        }
+      }
     }
-  }, [tmdbId, isBookmarked, movie]);
+  }, [tmdbId, isBookmarked, movie, isAuthenticated, watchlistItemId]);
 
   // Loading state
   if (loading) {

@@ -48,6 +48,10 @@ async function apiFetch<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
+  if (!accessToken && typeof window !== "undefined") {
+    loadTokens();
+  }
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
@@ -80,6 +84,9 @@ async function apiFetch<T>(
         headers,
       });
       if (!retryRes.ok) throw new Error(`API error: ${retryRes.status}`);
+      if (retryRes.status === 204) {
+        return null as T;
+      }
       return retryRes.json();
     } else {
       clearTokens();
@@ -108,6 +115,10 @@ async function apiFetch<T>(
       // Keep default message if response body is not JSON
     }
     throw new Error(message);
+  }
+
+  if (response.status === 204) {
+    return null as T;
   }
 
   return response.json();
