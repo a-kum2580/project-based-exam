@@ -79,6 +79,28 @@ class TrackInteractionAPITest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(UserMovieInteraction.objects.count(), 1)
 
+    def test_track_view(self):
+        data = {
+            "movie_tmdb_id": 550,
+            "movie_title": "Fight Club",
+            "interaction_type": "view",
+            "genre_ids": [28, 18],
+        }
+        response = self.client.post("/api/recommendations/track/", data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(UserMovieInteraction.objects.filter(interaction_type="view").count(), 1)
+
+    def test_track_search(self):
+        data = {
+            "movie_tmdb_id": 18,
+            "movie_title": "Genre: Drama",
+            "interaction_type": "search",
+            "genre_ids": [18],
+        }
+        response = self.client.post("/api/recommendations/track/", data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(UserMovieInteraction.objects.filter(interaction_type="search").count(), 1)
+
     def test_track_unauthenticated(self):
         self.client.force_authenticate(user=None)
         data = {"movie_tmdb_id": 550, "movie_title": "Fight Club", "interaction_type": "like"}
