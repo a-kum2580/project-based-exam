@@ -1,5 +1,7 @@
 import logging
 from collections import Counter
+from typing import Any
+from django.conf import settings
 from django.db.models import Avg, Count
 from movies.services.tmdb_service import TMDBService
 
@@ -15,6 +17,17 @@ INTERACTION_WEIGHTS = {
     "dislike": -3.0,
 }
 
+PAGINATION_LIMITS = getattr(
+    settings,
+    "PAGINATION_LIMITS",
+    {
+        "top_genres": 3,
+        "director_recommendations": 10,
+        "because_you_watched_source": 5,
+        "because_you_watched_per_movie": 5,
+    },
+)
+
 
 class RecommendationEngine:
     """Class to generate personalized movie recommendations."""
@@ -22,7 +35,7 @@ class RecommendationEngine:
     def __init__(self):
         self.tmdb = TMDBService()
 
-    def compute_genre_preferences(self, user) -> list:
+    def compute_genre_preferences(self, user) -> list[tuple[int, float]]:
         from recommendations.models import UserMovieInteraction, UserGenrePreference
         from movies.models import Genre
 
@@ -62,7 +75,7 @@ class RecommendationEngine:
 
         return sorted(genre_scores.items(), key=lambda x: x[1], reverse=True)
 
-    def get_recommendations(self, user, page: int = 1, limit: int = 20) -> list:
+    def get_recommendations(self, user, page: int = 1, limit: int = 20) -> list[dict[str, Any]]:
         from recommendations.models import UserMovieInteraction
 
         ## computing fresh preferences
@@ -81,7 +94,7 @@ class RecommendationEngine:
         )
 
         # getting top 3 genres
-        top_genres = preferences[:3]
+        top_genres = preferences[:PAGINATION_LIMITS["top_genres"]]
         all_movies = []
 
         for genre_id, score in top_genres:
@@ -113,7 +126,7 @@ class RecommendationEngine:
 
         return unique_movies[:limit]
 
-    def get_director_recommendations(self, director_tmdb_id: int, exclude_movie_id: int = None) -> list:
+    def get_director_recommendations(self, director_tmdb_id: int, exclude_movie_id: int = None) -> list[dict[str, Any]]:
         """getting other movies by a specific director."""
         data = self.tmdb.get_person_details(director_tmdb_id)
         if not data:
@@ -127,20 +140,20 @@ class RecommendationEngine:
 
         ##sorting by popularity
         directed.sort(key=lambda x: x.get("popularity", 0), reverse=True)
-        return directed[:10]
+        return directed[:PAGINATION_LIMITS["director_recommendations"]]
 
-    def get_because_you_watched(self, user, limit: int = 20) -> dict:
+    def get_because_you_watched(self, user, limit: int = 20) -> dict[str, list[dict[str, Any]]]:
         from recommendations.models import UserMovieInteraction
 
         recent = UserMovieInteraction.objects.filter(
             user=user,
             interaction_type__in=["watched", "like"],
-        ).order_by("-created_at")[:5]
+        ).order_by("-created_at")[:PAGINATION_LIMITS["because_you_watched_source"]]
 
         results = {}
         for interaction in recent:
             data = self.tmdb.get_movie_recommendations(interaction.movie_tmdb_id)
-            movies = data.get("results", [])[:5]
+            movies = data.get("results", [])[:PAGINATION_LIMITS["because_you_watched_per_movie"]]
             if movies:
                 results[interaction.movie_title] = movies
 

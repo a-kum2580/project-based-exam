@@ -1,4 +1,5 @@
 import logging
+import json
 from typing import Optional
 from django.conf import settings
 from django.core.cache import cache
@@ -38,7 +39,8 @@ class TMDBService:
             logger.error("TMDB_API_KEY is missing")
             return {"_error": "TMDB_API_KEY is missing"}
 
-        cache_key = f"tmdb:{endpoint}:{params}"
+        normalized_params = json.dumps(params or {}, sort_keys=True)
+        cache_key = f"tmdb:{endpoint}:{normalized_params}"
         cached = cache.get(cache_key)
         if cached:
             return cached

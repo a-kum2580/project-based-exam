@@ -73,6 +73,7 @@
   - `python manage.py test users recommendations movies` → PASS (49 tests)
   - `python manage.py test movies` after adaptive scan refactor → PASS (23 tests)
   - `python manage.py test movies recommendations users` after smells #3-#6 fixes → PASS (51 tests)
+  - `python manage.py test movies recommendations users` after smells #7-#17 work → PASS (51 tests)
   - Note: warnings like “Unauthorized”/“Bad Request” appear during tests because negative test cases intentionally validate 401/400 responses.
 
 ### f) Remaining Limitations (known risks / technical debt)
@@ -272,69 +273,166 @@
    - **Location**: `backend/movies/views.py:240-330` (`MOOD_MAP`)
    - **Issue**: ~90 lines of hard-coded genre IDs (e.g., `"genres": "28,53,80"`) with manual comment mapping.
    - **Impact**: Changes require code updates; no central management; error-prone.
-   - **Fix Strategy**: Move `MOOD_MAP` to a dedicated config module or database model (`Mood` table).
+  - **Solution Implemented**: Moved mood definitions into dedicated config module.
+
+  **What changed in code**
+  - Added `backend/movies/config/moods.py` with `MOOD_MAP`.
+  - Removed large inline mood dict from `backend/movies/views.py`.
+  - `mood_list` and `mood_movies` now consume shared config import.
+
+  **Result**
+  - mood definitions are centrally managed
+  - view complexity reduced
+  - future updates no longer require editing endpoint code
 
 8. **Duplicate URL Building Logic**
    - **Location**: `backend/movies/models.py:104-125` (properties) and `backend/movies/serializers.py:141-149` (serializer methods)
    - **Issue**: TMDB image URL construction repeated in 2+ places.
    - **Impact**: Brittle when base URL changes; maintainability risk.
-   - **Fix Strategy**: Create single utility function `build_tmdb_image_url(path, size)` in a shared module.
+   - **Solution Implemented**: Introduced shared media URL helper functions and wired models/serializers to them.
+
+   **What changed in code**
+   - Added `backend/movies/utils/media.py`:
+     - `build_tmdb_image_url(path, size)`
+     - `build_youtube_watch_url(video_key)`
+     - `build_youtube_embed_url(video_key)`
+   - Updated `backend/movies/models.py` properties (`profile_url`, `poster_url`, `poster_url_small`, `backdrop_url`, `trailer_url`, `trailer_embed_url`, `logo_url`) to use shared helpers.
+
+   **Result**
+   - one source of truth for media URL construction
+   - lower risk when URL patterns or base path changes
 
 9. **Duplicate Query Parameter Extraction**
    - **Location**: Multiple endpoints (`search_movies`, `trending_movies`, `mood_movies`, etc.)
    - **Issue**: Repeated code: `page = safe_int(request.query_params.get("page", 1))` and similar patterns.
    - **Impact**: If validation logic changes, must update 10+ places; inconsistency risk.
-   - **Fix Strategy**: Create request parameter parser utility (`RequestParams` class or decorator).
+   - **Solution Implemented**: Added utility parser and replaced duplicated extraction in movie endpoints.
+
+   **What changed in code**
+   - Added `backend/movies/utils/query_params.py` with `RequestParams` helper:
+     - `page(...)`, `text(...)`, `int_or_none(...)`, `float_or_none(...)`
+   - Updated `backend/movies/views.py` endpoints to use parser (`search_movies`, `trending_movies`, `now_playing`, `top_rated`, `mood_movies`, genres action).
+
+   **Result**
+   - reduced repetitive parsing code
+   - consistent conversion and defaults across endpoints
 
 10. **Large Static Dictionary at Module Level**
     - **Location**: `backend/movies/views.py:240-330` (`MOOD_MAP`)
     - **Issue**: 90+ lines defining 10+ moods with nested dicts.
     - **Impact**: Not DRY; hard to extend; should be configuration or database-backed.
-    - **Fix Strategy**: Move to `config/moods.py` or as a database model.
+    - **Solution Implemented**: Moved mood dictionary to `backend/movies/config/moods.py` (shared module-level config).
+
+    **Result**
+    - removed large constant block from view module
+    - improved readability and maintainability of `movies/views.py`
 
 11. **Missing N+1 Query in PersonDetailSerializer**
     - **Location**: `backend/movies/serializers.py:34-41` (`get_acted_movies`, `get_directed_movies`)
     - **Issue**: Calls `MovieCompactSerializer(movies, many=True)`, which in turn calls `.count()` on genres for each movie.
     - **Impact**: If a person has 20 movies with 5 genres each → 100+ extra DB queries.
-    - **Fix Strategy**: Use `select_related` / `prefetch_related` in serializer or call `.only()` to limit fields.
+    - **Solution Implemented**: Reduced nested query pressure by prefetching and removing expensive nested genre count field in embedded movie payloads.
+
+    **What changed in code**
+    - Added `GenreCompactSerializer` (no `movie_count`) for embedded movie genres.
+    - Updated `MovieCompactSerializer` and `MovieDetailSerializer` to use `GenreCompactSerializer`.
+    - Updated `PersonDetailSerializer` queries to use `.prefetch_related("genres")` for directed/acted movie lists.
+
+    **Result**
+    - avoids repeated `obj.movies.count()` calls per embedded genre in person detail responses
+    - fewer queries for person detail endpoints with large filmographies
 
 12. **Hard-Coded Pagination Limits (10 vs 20)**
     - **Location**: Multiple files—`serializers.py:34-41` ([:20]), `engine.py:140` ([:10]), `views.py:195` ([:10])
     - **Issue**: Inconsistent limits without configuration or constants.
     - **Impact**: Can't adjust pagination globally; hard to debug why different endpoints return different result counts.
-    - **Fix Strategy**: Define `PAGINATION_LIMITS` constant dict in settings; use consistently.
+    - **Solution Implemented**: Added centralized limit constants in settings and applied them across serializers/services/views.
+
+    **What changed in code**
+    - Added `PAGINATION_LIMITS` dict in `backend/cinequest/settings.py`.
+    - Applied settings limits in:
+      - `backend/movies/serializers.py` (`person_movies`, `movie_cast`)
+      - `backend/recommendations/services/engine.py` (`top_genres`, `director_recommendations`, `because_you_watched_*`)
+      - `backend/recommendations/views.py` (`recent_interactions`, `max_page`)
+      - `backend/movies/views.py` (`compare_movies`, `max_page`)
+
+    **Result**
+    - limit values are now centralized and consistent
+    - behavior changes can be made from settings without touching business logic
 
 13. **Inconsistent Error Response Shapes**
     - **Location**: Throughout views
     - **Issue**: Some endpoints return `{"error": "..."}`, others `{"results": [...], ...}`, some include `query`, others don't.
     - **Impact**: Frontend must handle multiple response schemas; fragile integration.
-    - **Fix Strategy**: Define standardized response envelope (e.g., `APIResponse` serializer).
+    - **Solution Implemented (Phase 1)**: Added unified error response helper in movies endpoints while preserving existing successful payload contracts.
+
+    **What changed in code**
+    - Added `error_response(message, status_code)` helper in `backend/movies/views.py`.
+    - Replaced multiple ad-hoc error `Response(...)` constructions with helper in updated endpoints.
+
+    **Result**
+    - reduced error-shape drift in movies API
+    - backward compatibility maintained for successful responses
+
+    **Remaining scope**
+    - full cross-app response envelope standardization (movies/users/recommendations) remains a broader follow-up.
 
 14. **Repeated URL Building in Serializers**
     - **Location**: `backend/movies/serializers.py:141-149` (`TMDBMovieSerializer.to_representation`)
     - **Issue**: Hard-codes base URL string instead of using settings.
     - **Impact**: If URL changes, must update multiple files.
-    - **Fix Strategy**: Use centralized utility function (see #8).
+    - **Solution Implemented**: `TMDBMovieSerializer.to_representation` now uses shared media helper.
+
+    **What changed in code**
+    - Replaced hard-coded base URL assembly with `build_tmdb_image_url(...)` in `backend/movies/serializers.py`.
+
+    **Result**
+    - serializer URL generation now matches model URL generation source-of-truth.
 
 15. **Missing Type Hints**
     - **Location**: `backend/movies/views.py`, `backend/recommendations/services/engine.py`
     - **Issue**: Functions lack return type annotations (e.g., `def mood_movies(request, mood_slug):` should be `-> Response`).
     - **Impact**: IDE autocomplete limited; harder to catch type errors.
-    - **Fix Strategy**: Add return types to all view functions and service methods.
+    - **Solution Implemented (targeted)**: Added type hints to high-traffic and refactored methods/functions.
+
+    **What changed in code**
+    - Added return type hints in key movie endpoints (`search_movies`, `trending_movies`, `now_playing`, `top_rated`, `movie_detail_tmdb`, `search_people`, `mood_list`, `mood_movies`, `discover_filtered`, `compare_movies`).
+    - Added typed signatures in `backend/recommendations/services/engine.py` for core methods.
+    - Added typed utility signatures in request parsing and discovery helper methods.
+
+    **Result**
+    - better static tooling support and IDE guidance in critical paths.
 
 #### **LOW SEVERITY** (technical debt / code quality)
 
 16. **Cache Key Collision Risk**
-    - **Location**: `backend/movies/views.py:39` (`build_advanced_filter_cache_key`)
+    - **Location**: `backend/movies/services/tmdb_service.py` (`TMDBService._get` cache key)
     - **Issue**: Uses `f"tmdb:{endpoint}:{params}"` where `params` is a dict—dict string representation not deterministic.
     - **Impact**: Parameter order variations could fail cache lookup.
-    - **Fix Strategy**: Use `json.dumps(params, sort_keys=True)` for deterministic serialization.
+    - **Solution Implemented**: Cache key serialization normalized with sorted JSON.
+
+    **What changed in code**
+    - In `TMDBService._get`, cache key now uses:
+      - `normalized_params = json.dumps(params or {}, sort_keys=True)`
+      - `cache_key = f"tmdb:{endpoint}:{normalized_params}"`
+
+    **Result**
+    - deterministic cache keys
+    - better cache hit consistency and no dict-order drift
 
 17. **Unused/Redundant Movie Serializer Properties**
     - **Location**: `backend/movies/serializers.py:117-149`
     - **Issue**: `TMDBMovieSerializer` includes `backdrop_url`, `poster_url_small`, `trailer_embed_url`, `year`—unclear if frontend uses all.
     - **Impact**: Dead code accumulation; technical debt.
-    - **Fix Strategy**: Audit frontend usage; remove unused fields or document why they're kept.
+    - **Solution Implemented**: Audited frontend usage and retained contract-relevant fields; no removal done to avoid regressions.
+
+    **Audit outcome**
+    - `year`, `poster_url_small`, and `backdrop_url` are used by frontend components and types.
+    - `trailer_embed_url` remains part of detail payload contract and is kept for compatibility.
+
+    **Result**
+    - avoided unsafe field removals
+    - contract preserved while refactoring surrounding duplication (#8/#14)
 
 18. **TMDB API Error Propagation Inconsistent**
     - **Location**: Various endpoints
@@ -441,4 +539,9 @@
   - paging now uses bounded page parsing across movies/recommendations (`1..500`).
   - sync flow now raises and handles explicit exceptions (`TMDBAPIError`, `MovieNotFoundError`).
   - module-level service singletons replaced with provider-based dependency construction in views.
+  - mood configuration extracted from views into dedicated config module.
+  - media URL construction centralized into shared helper utilities and reused in models/serializers.
+  - reusable query parameter parser added and wired into movie endpoints.
+  - centralized `PAGINATION_LIMITS` added in settings and adopted across views/serializers/services.
+  - deterministic TMDB cache key serialization implemented using sorted JSON params.
 

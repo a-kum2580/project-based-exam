@@ -1,6 +1,8 @@
 from datetime import timedelta
 from collections import Counter
+from typing import Any
 
+from django.conf import settings
 from django.db.models import Count, Avg
 from django.db.models.functions import TruncDate
 from django.utils import timezone
@@ -19,13 +21,15 @@ from .services.engine import RecommendationEngine
 from movies.serializers import TMDBMovieSerializer
 
 MAX_PAGE = 500
+PAGINATION_LIMITS = getattr(settings, "PAGINATION_LIMITS", {"max_page": 500, "recent_interactions": 10})
+MAX_PAGE = PAGINATION_LIMITS["max_page"]
 
 
 def get_recommendation_engine() -> RecommendationEngine:
     return RecommendationEngine()
 
 
-def _parse_page(request, default=1, max_page=MAX_PAGE):
+def _parse_page(request, default=1, max_page=MAX_PAGE) -> int:
     """Parse a positive int `page` query param."""
     try:
         page = int(request.query_params.get("page", default))
@@ -36,7 +40,7 @@ def _parse_page(request, default=1, max_page=MAX_PAGE):
         return default
 
 
-def _build_genre_distribution(interactions_qs, limit=10):
+def _build_genre_distribution(interactions_qs, limit=10) -> list[dict[str, Any]]:
     """
     Build a top-N genre distribution based on stored interaction.genre_ids.
     Returns: [{name, tmdb_id, count}, ...]
@@ -55,7 +59,7 @@ def _build_genre_distribution(interactions_qs, limit=10):
     ]
 
 
-def _build_activity_timeline(interactions_qs, days=30):
+def _build_activity_timeline(interactions_qs, days=30) -> list[dict[str, Any]]:
     """Build daily interaction counts for the last N days."""
     start = timezone.now() - timedelta(days=days)
     daily = (
@@ -68,7 +72,7 @@ def _build_activity_timeline(interactions_qs, days=30):
     return [{"date": str(d["date"]), "count": d["count"]} for d in daily]
 
 
-def _build_preference_scores(user, engine, limit=10):
+def _build_preference_scores(user, engine, limit=10) -> list[dict[str, Any]]:
     """Compute and return top-N saved preference scores for the user."""
     engine.compute_genre_preferences(user)
     prefs = UserGenrePreference.objects.filter(user=user).order_by("-weight")[:limit]
@@ -185,5 +189,8 @@ def dashboard_stats(request):
         "genre_distribution": _build_genre_distribution(interactions),
         "preference_scores": _build_preference_scores(user, engine),
         "activity_timeline": _build_activity_timeline(interactions),
-        "recent_activity": UserMovieInteractionSerializer(interactions.order_by("-created_at")[:10], many=True).data,
+        "recent_activity": UserMovieInteractionSerializer(
+            interactions.order_by("-created_at")[:PAGINATION_LIMITS["recent_interactions"]],
+            many=True,
+        ).data,
     })

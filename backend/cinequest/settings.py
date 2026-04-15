@@ -100,6 +100,18 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {"anon": "100/hour", "user": "1000/hour"},
 }
 
+PAGINATION_LIMITS = {
+    "max_page": 500,
+    "person_movies": 20,
+    "movie_cast": 10,
+    "recent_interactions": 10,
+    "because_you_watched_source": 5,
+    "because_you_watched_per_movie": 5,
+    "top_genres": 3,
+    "director_recommendations": 10,
+    "compare_movies": 2,
+}
+
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),

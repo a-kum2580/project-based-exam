@@ -1,5 +1,20 @@
 from rest_framework import serializers
+from django.conf import settings
 from .models import Genre, Person, Movie, MovieCast, WatchProvider
+from .utils.media import build_tmdb_image_url
+
+
+PAGINATION_LIMITS = getattr(
+    settings,
+    "PAGINATION_LIMITS",
+    {"person_movies": 20, "movie_cast": 10},
+)
+
+
+class GenreCompactSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Genre
+        fields = ["id", "tmdb_id", "name", "slug"]
 
 
 class GenreSerializer(serializers.ModelSerializer):
@@ -35,11 +50,19 @@ class PersonDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_directed_movies(self, obj):
-        movies = obj.directed_movies.order_by("-release_date")[:20]
+        movies = (
+            obj.directed_movies
+            .prefetch_related("genres")
+            .order_by("-release_date")[:PAGINATION_LIMITS["person_movies"]]
+        )
         return MovieCompactSerializer(movies, many=True).data
 
     def get_acted_movies(self, obj):
-        movies = obj.acted_movies.order_by("-release_date")[:20]
+        movies = (
+            obj.acted_movies
+            .prefetch_related("genres")
+            .order_by("-release_date")[:PAGINATION_LIMITS["person_movies"]]
+        )
         return MovieCompactSerializer(movies, many=True).data
 
 
@@ -63,7 +86,7 @@ class MovieCompactSerializer(serializers.ModelSerializer):
     """Lightweight movie serializer for lists."""
     poster_url = serializers.ReadOnlyField()
     poster_url_small = serializers.ReadOnlyField()
-    genres = GenreSerializer(many=True, read_only=True)
+    genres = GenreCompactSerializer(many=True, read_only=True)
     year = serializers.SerializerMethodField()
 
     class Meta:
@@ -84,7 +107,7 @@ class MovieDetailSerializer(serializers.ModelSerializer):
     backdrop_url = serializers.ReadOnlyField()
     trailer_url = serializers.ReadOnlyField()
     trailer_embed_url = serializers.ReadOnlyField()
-    genres = GenreSerializer(many=True, read_only=True)
+    genres = GenreCompactSerializer(many=True, read_only=True)
     directors = PersonCompactSerializer(many=True, read_only=True)
     cast = serializers.SerializerMethodField()
     watch_providers = WatchProviderSerializer(many=True, read_only=True)
@@ -106,7 +129,7 @@ class MovieDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_cast(self, obj):
-        cast = MovieCast.objects.filter(movie=obj).select_related("person")[:10]
+        cast = MovieCast.objects.filter(movie=obj).select_related("person")[:PAGINATION_LIMITS["movie_cast"]]
         return MovieCastSerializer(cast, many=True).data
 
     def get_year(self, obj):
@@ -128,12 +151,11 @@ class TMDBMovieSerializer(serializers.Serializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        base = "https://image.tmdb.org/t/p"
         if data.get("poster_path"):
-            data["poster_url"] = f"{base}/w500{data['poster_path']}"
-            data["poster_url_small"] = f"{base}/w185{data['poster_path']}"
+            data["poster_url"] = build_tmdb_image_url(data["poster_path"], "w500")
+            data["poster_url_small"] = build_tmdb_image_url(data["poster_path"], "w185")
         if data.get("backdrop_path"):
-            data["backdrop_url"] = f"{base}/w1280{data['backdrop_path']}"
+            data["backdrop_url"] = build_tmdb_image_url(data["backdrop_path"], "w1280")
         rd = data.get("release_date", "")
         data["year"] = int(rd[:4]) if rd and len(rd) >= 4 else None
         return data
