@@ -6,6 +6,9 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 User = get_user_model()
 
+EMAIL_PATTERN = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
+SPECIAL_CHAR_PATTERN = r"[!@#$%^&*()_+\-=\[\]{};':\",.<>?/]"
+
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -30,7 +33,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         password = data.get("password") or ""
         if not password[:1].isupper():
             raise serializers.ValidationError({"password": "Password must start with a capital letter."})
-        if not re.search(r"[^A-Za-z0-9]", password):
+        if not re.search(SPECIAL_CHAR_PATTERN, password):
             raise serializers.ValidationError({"password": "Password must include at least one special character (e.g. !@#$)."})
         
         # Enforce strong password complexity
@@ -47,7 +50,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate_email(self, value):
         email = value.strip().lower()
         # Allow common email forms and any valid suffix such as .org, .edu, .io, etc.
-        if not re.match(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$", email):
+        if not re.match(EMAIL_PATTERN, email):
             raise serializers.ValidationError(
                 "Enter a valid email address with a full domain (e.g., name@domain.org)."
             )

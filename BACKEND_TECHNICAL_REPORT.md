@@ -74,6 +74,7 @@
   - `python manage.py test movies` after adaptive scan refactor → PASS (23 tests)
   - `python manage.py test movies recommendations users` after smells #3-#6 fixes → PASS (51 tests)
   - `python manage.py test movies recommendations users` after smells #7-#17 work → PASS (51 tests)
+  - `python manage.py test movies recommendations users` after smells #18-#28 work → PASS (54 tests)
   - Note: warnings like “Unauthorized”/“Bad Request” appear during tests because negative test cases intentionally validate 401/400 responses.
 
 ### f) Remaining Limitations (known risks / technical debt)
@@ -438,67 +439,190 @@
     - **Location**: Various endpoints
     - **Issue**: Some use `_ensure_tmdb_ok(data)`, others check `.get("results", [])` without verifying `_error` key.
     - **Impact**: Some failures silently return empty results; inconsistent UX.
-    - **Fix Strategy**: Use consistent error checking pattern across all endpoints.
+    - **Solution Implemented**: Applied consistent TMDB error checks in movies endpoints and recommendations engine.
+
+    **What changed in code**
+    - Updated `backend/movies/views.py` to call `_ensure_tmdb_ok(...)` on TMDB-backed actions/endpoints that previously skipped validation:
+      - movie recommendations/similar
+      - genre fallback list
+      - mood movies
+      - compare movies
+    - Added request-aware context logging inside `_ensure_tmdb_ok(...)` so failures include:
+      - `request_id`
+      - endpoint context label
+      - TMDB error payload
+    - Added `RecommendationEngine._ensure_tmdb_ok(...)` and used it for:
+      - trending fallback
+      - per-genre discover calls
+      - because-you-watched calls
+
+    **Result**
+    - TMDB failures are now surfaced consistently instead of silently returning empty lists.
+    - error diagnostics are traceable by request id and endpoint context.
 
 19. **Boundary Conditions Not Tested**
     - **Location**: `backend/recommendations/services/engine.py:95-120` (`get_recommendations`)
     - **Issue**: If user has < 3 genres, uses all; if 0, falls back silently to trending. No explicit error handling.
     - **Impact**: Edge cases could be buggy; untested scenarios.
-    - **Fix Strategy**: Add explicit checks and test coverage for zero/one/few preference cases.
+    - **Solution Implemented**: Added explicit boundary handling plus dedicated tests.
+
+    **What changed in code**
+    - In `backend/recommendations/services/engine.py`, `get_recommendations(...)` now explicitly handles:
+      - empty preferences -> trending fallback
+      - empty `top_genres` after slicing -> trending fallback
+    - Added tests in `backend/recommendations/tests.py`:
+      - `test_empty_top_genres_falls_back_to_trending`
+      - `test_single_preference_genre_works`
+
+    **Result**
+    - fallback behavior is explicit and covered by tests for edge preference distributions.
 
 20. **WatchProvider Model Unused Country Field**
     - **Location**: `backend/movies/models.py` (`WatchProvider.country_code`)
     - **Issue**: Field always "US"; never used for filtering or multi-country support.
     - **Impact**: Misleading DB schema; dead code.
-    - **Fix Strategy**: Remove or implement country-based filtering globally.
+    - **Solution Implemented**: Implemented country-aware watch provider sync + response filtering.
+
+    **What changed in code**
+    - Added settings in `backend/cinequest/settings.py`:
+      - `DEFAULT_PROVIDER_COUNTRY`
+      - `WATCH_PROVIDER_COUNTRIES`
+    - Updated `MovieSyncService.sync_movie(...)` in `backend/movies/services/tmdb_service.py`:
+      - syncs provider rows for configured countries
+      - stores actual `country_code` per provider row
+    - Updated `MovieDetailSerializer` in `backend/movies/serializers.py`:
+      - `watch_providers` now filters by `country` query param
+      - falls back to authenticated user `country_code`
+      - then falls back to default provider country
+
+    **Result**
+    - `country_code` field is now functionally used and no longer dead schema.
 
 21. **JSONField Default Mutable Object**
     - **Location**: `backend/users/models.py:7`, `backend/recommendations/models.py:20`
     - **Issue**: `default=list` (though DRF handles this correctly in modern Django).
     - **Impact**: Technically correct but confusing; could cause issues if model used outside DRF context.
-    - **Fix Strategy**: Use `default=list` callable or explicit `default=[]` with clarifying comment.
+    - **Solution Implemented**: Retained callable defaults and documented intent explicitly.
+
+    **What changed in code**
+    - Added clarifying comments on JSONField definitions using `default=list` in:
+      - `backend/users/models.py`
+      - `backend/recommendations/models.py`
+
+    **Result**
+    - behavior stays correct (callable default) and maintainers get explicit guidance on why this is safe.
 
 22. **Router Registration Name Confusing**
     - **Location**: `backend/movies/urls.py:6` (`router.register(r"list", ...)`)
     - **Issue**: Endpoint is `/api/movies/list/` not `/api/movies/`; naming suggests it's a subpath.
     - **Impact**: Confusing API structure for consumers; inconsistent with REST conventions.
-    - **Fix Strategy**: Register as `r""` (empty) to use `/api/movies/` + `/api/movies/{id}/`.
+    - **Solution Implemented**: Made router root canonical while preserving legacy compatibility routes.
+
+    **What changed in code**
+    - In `backend/movies/urls.py`:
+      - switched canonical registration to `router.register(r"", views.MovieViewSet, basename="movie")`
+      - preserved old client compatibility with aliases:
+        - `/api/movies/list/`
+        - `/api/movies/list/<id>/`
+      - ordered router registrations so specific prefixes (`genres`, `people`) resolve before root.
+
+    **Result**
+    - RESTful canonical route is now `/api/movies/`.
+    - existing clients using `/api/movies/list/` continue to work.
 
 23. **Regex Password Validation Overly Lenient**
     - **Location**: `backend/users/serializers.py:26`
     - **Issue**: `re.search(r"[^A-Za-z0-9]", password)` allows any non-alphanumeric (space, newline, etc.).
     - **Impact**: Could accept weak passwords like `A ` or `A\n`.
-    - **Fix Strategy**: Define allowed special characters set: `if not re.search(r"[!@#$%^&*()_+\-=\[\]{};':\",.<>?]", password)`
+    - **Solution Implemented**: Replaced broad non-alphanumeric check with explicit allowed special-character pattern.
+
+    **What changed in code**
+    - In `backend/users/serializers.py`:
+      - added `SPECIAL_CHAR_PATTERN`
+      - validation now uses `re.search(SPECIAL_CHAR_PATTERN, password)`
+    - Added regression coverage in `backend/users/tests.py`:
+      - `test_register_rejects_whitespace_only_symbol_password`
+
+    **Result**
+    - passwords with only whitespace/non-visible symbols no longer satisfy special-char rule.
 
 24. **Missing Request Logging/Tracing**
     - **Location**: All view functions
     - **Issue**: Failed TMDB calls only logged at service level; no request-level tracing.
     - **Impact**: Debugging production issues difficult; no correlation IDs.
-    - **Fix Strategy**: Add request ID middleware; log all external API calls with context.
+    - **Solution Implemented (Phase 1)**: Added request-id middleware and TMDB failure context logging.
+
+    **What changed in code**
+    - Added `backend/cinequest/middleware.py` with `RequestIdMiddleware`:
+      - assigns/propagates `X-Request-ID`
+      - attaches `request.request_id`
+    - Registered middleware in `backend/cinequest/settings.py`.
+    - Updated movies TMDB error handling logs to include `request_id` and endpoint context.
+
+    **Result**
+    - request-level tracing now exists for TMDB failures in movie endpoints.
+
+    **Remaining scope**
+    - full cross-app structured logging for all outbound calls can be expanded in a dedicated observability pass.
 
 25. **Genre Preference Computation Inefficient**
     - **Location**: `backend/recommendations/services/engine.py:50-55`
     - **Issue**: Nested loop iterates through all interactions and genre_ids multiple times.
     - **Impact**: O(n*m) complexity; slow for users with many interactions.
-    - **Fix Strategy**: Use set operations and aggregation to reduce iterations.
+    - **Solution Implemented**: Removed repeated inner scans by tracking interaction counts during single pass.
+
+    **What changed in code**
+    - In `backend/recommendations/services/engine.py`:
+      - added `genre_interaction_counts = Counter()`
+      - incremented interaction count in the existing loop
+      - replaced per-genre `sum(...)` recomputation with O(1) counter lookup
+
+    **Result**
+    - avoids repeated scans over the full interaction queryset for each genre.
+    - lower compute overhead for active users.
 
 26. **Hardcoded Movie Comparison Limit**
     - **Location**: `backend/movies/views.py:410` (`[:2]`)
     - **Issue**: Only compares first 2 movies; hard-coded without explanation.
     - **Impact**: Can't extend to compare 3+ movies without code change.
-    - **Fix Strategy**: Make configurable via query param or constant.
+    - **Solution Implemented**: Comparison minimum/count uses centralized settings constant.
+
+    **What changed in code**
+    - `backend/cinequest/settings.py` now defines `PAGINATION_LIMITS["compare_movies"]`.
+    - `backend/movies/views.py::compare_movies` uses this constant for:
+      - minimum input validation
+      - slice count for fetched movie ids
+
+    **Result**
+    - compare-limit behavior is configurable without endpoint code changes.
 
 27. **Unused Import: `hashlib`**
     - **Location**: `backend/movies/views.py:3`
     - **Issue**: Imported but not used (MD5 hashing deferred to cache key builder).
     - **Impact**: Code clutter; if `build_advanced_filter_cache_key` is modified, this becomes needed.
-    - **Fix Strategy**: Remove or document why it's imported.
+    - **Solution Implemented**: Removed unused import from views and kept hashing only where it is actively used.
+
+    **What changed in code**
+    - `backend/movies/views.py` no longer imports `hashlib`.
+    - hash usage remains in cache-key generation utilities where required.
+
+    **Result**
+    - reduced dead imports and lint noise.
 
 28. **Validation Regex Patterns Duplicated**
     - **Location**: `backend/users/serializers.py:26-28`
     - **Issue**: Email regex pattern hard-coded; special character regex hard-coded.
     - **Impact**: If validation rules change, must update in multiple places.
-    - **Fix Strategy**: Define as module-level constants (`EMAIL_PATTERN`, `SPECIAL_CHAR_PATTERN`).
+    - **Solution Implemented**: Moved regex literals to module-level constants and reused them.
+
+    **What changed in code**
+    - In `backend/users/serializers.py`:
+      - added `EMAIL_PATTERN`
+      - added `SPECIAL_CHAR_PATTERN`
+      - email and password validators now reference shared constants
+
+    **Result**
+    - validation rules are centralized and easier to update safely.
 
 ---
 
@@ -511,12 +635,6 @@
 | Low      | 13    | Technical debt, unused code, configuration, logging |
 | **Total** | **28** | **Across views, services, models, serializers** |
 
-#### **Recommended Priority for Fixes**
-
-1. **Immediate** (blocks scaling/correctness): #2 (500-page scan), #3 (GET mutation), #5 (exception handling), #6 (global singletons)
-2. **Short-term** (improves stability): #1 (giant function), #9 (duplicate params), #12 (pagination limits), #18 (error consistency)
-3. **Medium-term** (tech debt): #7 (mood config), #8 (URL building), #11 (N+1), #15 (type hints), #25 (perf)
-4. **Long-term** (nice-to-have): #16, #17, #20, #21, #22, #27, #28 (cleanup/polish)
 
 ### Limitations addressed during development (closed)
 
@@ -544,4 +662,10 @@
   - reusable query parameter parser added and wired into movie endpoints.
   - centralized `PAGINATION_LIMITS` added in settings and adopted across views/serializers/services.
   - deterministic TMDB cache key serialization implemented using sorted JSON params.
+  - TMDB error checks standardized across movie endpoints and recommendation engine calls.
+  - request-id middleware added (`X-Request-ID`) with request-aware TMDB failure logging context.
+  - watch-provider country support implemented end-to-end (sync + serializer filtering).
+  - movies router made canonical at `/api/movies/` with legacy `/list/` compatibility routes.
+  - password/email regex rules centralized and strengthened with dedicated tests.
+  - recommendation genre preference computation optimized using single-pass counters.
 

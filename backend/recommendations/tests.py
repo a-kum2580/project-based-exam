@@ -212,3 +212,38 @@ class RecommendationEngineNewUserTest(TestCase):
         self.assertEqual(len(movies), 2)
         self.assertEqual(movies[0]["title"], "Trending A")
         mock_trending.assert_called_once()
+
+
+class RecommendationEngineBoundaryTest(TestCase):
+    """Boundary coverage for recommendation fallback and top-genre handling."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="edgeuser", password="pass12345")
+
+    @patch.object(RecommendationEngine, "compute_genre_preferences")
+    @patch.object(TMDBService, "get_trending_movies")
+    def test_empty_top_genres_falls_back_to_trending(self, mock_trending, mock_compute):
+        mock_compute.return_value = []
+        mock_trending.return_value = {"results": [{"id": 1, "title": "Fallback Movie"}]}
+
+        engine = RecommendationEngine()
+        movies = engine.get_recommendations(self.user, page=1)
+
+        self.assertEqual(len(movies), 1)
+        self.assertEqual(movies[0]["title"], "Fallback Movie")
+        mock_trending.assert_called_once_with(page=1)
+
+    @patch.object(TMDBService, "discover_movies")
+    @patch.object(RecommendationEngine, "compute_genre_preferences")
+    def test_single_preference_genre_works(self, mock_compute, mock_discover):
+        mock_compute.return_value = [(28, 100.0)]
+        mock_discover.return_value = {
+            "results": [{"id": 10, "title": "Action Pick", "vote_average": 8.0}],
+        }
+
+        engine = RecommendationEngine()
+        movies = engine.get_recommendations(self.user, page=1)
+
+        self.assertEqual(len(movies), 1)
+        self.assertEqual(movies[0]["title"], "Action Pick")
+        mock_discover.assert_called_once()

@@ -259,19 +259,22 @@ class MovieSyncService:
                 break
 
         # Watch providers
-        providers = data.get("watch/providers", {}).get("results", {}).get("US", {})
+        providers_by_country = data.get("watch/providers", {}).get("results", {})
+        countries = getattr(settings, "WATCH_PROVIDER_COUNTRIES", [getattr(settings, "DEFAULT_PROVIDER_COUNTRY", "US")])
         WatchProvider.objects.filter(movie=movie).delete()
-        for ptype in ["flatrate", "rent", "buy", "free"]:
-            type_map = {"flatrate": "stream", "rent": "rent", "buy": "buy", "free": "free"}
-            for p in providers.get(ptype, []):
-                WatchProvider.objects.create(
-                    movie=movie,
-                    provider_name=p.get("provider_name", ""),
-                    provider_type=type_map[ptype],
-                    logo_path=p.get("logo_path", "") or "",
-                    link=providers.get("link", ""),
-                    country_code="US",
-                )
+        for country in countries:
+            providers = providers_by_country.get(country, {})
+            for ptype in ["flatrate", "rent", "buy", "free"]:
+                type_map = {"flatrate": "stream", "rent": "rent", "buy": "buy", "free": "free"}
+                for p in providers.get(ptype, []):
+                    WatchProvider.objects.create(
+                        movie=movie,
+                        provider_name=p.get("provider_name", ""),
+                        provider_type=type_map[ptype],
+                        logo_path=p.get("logo_path", "") or "",
+                        link=providers.get("link", ""),
+                        country_code=country,
+                    )
 
         logger.info(f"Synced movie: {movie.title}")
         return movie

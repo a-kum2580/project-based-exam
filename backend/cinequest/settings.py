@@ -33,6 +33,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "cinequest.middleware.RequestIdMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -127,6 +128,12 @@ CORS_ALLOW_CREDENTIALS = True
 TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "")
 TMDB_API_BASE_URL = "https://api.themoviedb.org/3"
 TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p"
+DEFAULT_PROVIDER_COUNTRY = os.environ.get("DEFAULT_PROVIDER_COUNTRY", "US")
+WATCH_PROVIDER_COUNTRIES = [
+    c.strip().upper()
+    for c in os.environ.get("WATCH_PROVIDER_COUNTRIES", DEFAULT_PROVIDER_COUNTRY).split(",")
+    if c.strip()
+]
 
 CACHES = {
     "default": {

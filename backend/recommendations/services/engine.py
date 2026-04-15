@@ -3,6 +3,7 @@ from collections import Counter
 from typing import Any
 from django.conf import settings
 from django.db.models import Avg, Count
+from rest_framework.exceptions import APIException
 from movies.services.tmdb_service import TMDBService
 
 logger = logging.getLogger(__name__)
@@ -35,12 +36,19 @@ class RecommendationEngine:
     def __init__(self):
         self.tmdb = TMDBService()
 
+    @staticmethod
+    def _ensure_tmdb_ok(data: dict, context: str):
+        if isinstance(data, dict) and data.get("_error"):
+            logger.error("TMDB failure context=%s error=%s", context, data.get("_error"))
+            raise APIException(detail=data["_error"])
+
     def compute_genre_preferences(self, user) -> list[tuple[int, float]]:
         from recommendations.models import UserMovieInteraction, UserGenrePreference
         from movies.models import Genre
 
         interactions = UserMovieInteraction.objects.filter(user=user)
         genre_scores = Counter()
+        genre_interaction_counts = Counter()
 
         # Pre-fetch all genre names in one query to avoid N+1
         genre_names = {g.tmdb_id: g.name for g in Genre.objects.all()}
@@ -49,6 +57,7 @@ class RecommendationEngine:
             w = INTERACTION_WEIGHTS.get(interaction.interaction_type, 1.0)
             for genre_id in interaction.genre_ids:
                 genre_scores[genre_id] += w
+                genre_interaction_counts[genre_id] += 1
                 if genre_id not in genre_names:
                     genre_names[genre_id] = f"Genre {genre_id}"
 
@@ -67,9 +76,7 @@ class RecommendationEngine:
                 defaults={
                     "genre_name": genre_names.get(genre_id, ""),
                     "weight": max(score, 0),
-                    "interaction_count": sum(
-                        1 for i in interactions if genre_id in i.genre_ids
-                    ),
+                    "interaction_count": genre_interaction_counts[genre_id],
                 },
             )
 
@@ -83,6 +90,7 @@ class RecommendationEngine:
 
         if not preferences:
             data = self.tmdb.get_trending_movies(page=page)
+            self._ensure_tmdb_ok(data, context="recommendations_trending_fallback")
             return data.get("results", [])
 
         ## getting movies the user has already seen
@@ -95,6 +103,10 @@ class RecommendationEngine:
 
         # getting top 3 genres
         top_genres = preferences[:PAGINATION_LIMITS["top_genres"]]
+        if not top_genres:
+            data = self.tmdb.get_trending_movies(page=page)
+            self._ensure_tmdb_ok(data, context="recommendations_empty_top_genres")
+            return data.get("results", [])
         all_movies = []
 
         for genre_id, score in top_genres:
@@ -104,6 +116,7 @@ class RecommendationEngine:
                 **{"vote_count.gte": 100},
                 page=page,
             )
+            self._ensure_tmdb_ok(data, context=f"recommendations_genre_{genre_id}")
             movies = data.get("results", [])
             for m in movies:
                 m["_recommendation_score"] = score * m.get("vote_average", 0)
@@ -153,6 +166,7 @@ class RecommendationEngine:
         results = {}
         for interaction in recent:
             data = self.tmdb.get_movie_recommendations(interaction.movie_tmdb_id)
+            self._ensure_tmdb_ok(data, context=f"because_you_watched_{interaction.movie_tmdb_id}")
             movies = data.get("results", [])[:PAGINATION_LIMITS["because_you_watched_per_movie"]]
             if movies:
                 results[interaction.movie_title] = movies

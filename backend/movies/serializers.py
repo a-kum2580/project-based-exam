@@ -110,7 +110,7 @@ class MovieDetailSerializer(serializers.ModelSerializer):
     genres = GenreCompactSerializer(many=True, read_only=True)
     directors = PersonCompactSerializer(many=True, read_only=True)
     cast = serializers.SerializerMethodField()
-    watch_providers = WatchProviderSerializer(many=True, read_only=True)
+    watch_providers = serializers.SerializerMethodField()
     year = serializers.SerializerMethodField()
     wikipedia_url = serializers.ReadOnlyField()
     wikipedia_summary = serializers.ReadOnlyField()
@@ -131,6 +131,19 @@ class MovieDetailSerializer(serializers.ModelSerializer):
     def get_cast(self, obj):
         cast = MovieCast.objects.filter(movie=obj).select_related("person")[:PAGINATION_LIMITS["movie_cast"]]
         return MovieCastSerializer(cast, many=True).data
+
+    def get_watch_providers(self, obj):
+        request = self.context.get("request")
+        requested_country = None
+        if request:
+            requested_country = (request.query_params.get("country") or "").upper().strip()
+        if not requested_country and request and getattr(request, "user", None) and request.user.is_authenticated:
+            requested_country = (getattr(request.user, "country_code", "") or "").upper().strip()
+
+        default_country = getattr(settings, "DEFAULT_PROVIDER_COUNTRY", "US")
+        country = requested_country or default_country
+        providers = obj.watch_providers.filter(country_code=country)
+        return WatchProviderSerializer(providers, many=True).data
 
     def get_year(self, obj):
         return obj.release_date.year if obj.release_date else None
