@@ -36,6 +36,12 @@ npm run test
 npm run test:watch
 ```
 
+6. **`MovieCarousel.test.tsx` (Conditional Rendering & Interaction Test)**
+   * **Why**: The carousel handles horizontal scrolling and displays skeleton loaders during data fetching. This test ensures the skeleton UI renders correctly when `loading=true` and verifies the left/right scroll buttons fire the correct `scrollBy` events.
+
+7. **`AuthModal.test.tsx` (User Interaction & Form State Test)**
+   * **Why**: The authentication modal manages complex form state (toggling between login and register). This test validates that users can type into the inputs, switch modes to reveal the email field, and trigger the correct context methods (`login` vs `register`).
+
 ---
 
 ## Expected Results
@@ -48,9 +54,11 @@ When running `npm run test`, Jest will discover all files ending in `.test.tsx` 
  PASS  Frontend_tests/HomePage.test.tsx
  PASS  Frontend_tests/MovieCard.test.tsx
  PASS  Frontend_tests/SearchModal.test.tsx
+ PASS  Frontend_tests/MovieCarousel.test.tsx
+ PASS  Frontend_tests/AuthModal.test.tsx
 
-Test Suites: 5 passed, 5 total
-Tests:       10 passed, 10 total
+Test Suites: 7 passed, 7 total
+Tests:       14 passed, 14 total
 Snapshots:   0 total
 Time:        2.845 s
 Ran all test suites.
