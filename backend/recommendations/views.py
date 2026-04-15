@@ -23,7 +23,6 @@ from movies.services.tmdb_service import TMDBService
 from cinequest.utils.param_parser import ParamParser
 from movies.serializers import TMDBMovieSerializer
 
-MAX_PAGE = 500
 PAGINATION_LIMITS = getattr(settings, "PAGINATION_LIMITS", {"max_page": 500, "recent_interactions": 10})
 MAX_PAGE = PAGINATION_LIMITS["max_page"]
 
@@ -83,6 +82,38 @@ def _build_preference_scores(user, engine, limit=10) -> list[dict[str, Any]]:
     return [{"name": p.genre_name, "weight": round(p.weight, 1), "count": p.interaction_count} for p in prefs]
 
 
+def _serialize_movie_map(movie_map: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
+    serialized = {}
+    for title, movies in movie_map.items():
+        serialized[title] = TMDBMovieSerializer(movies, many=True).data
+    return serialized
+
+
+def _build_dashboard_summary(interactions, watchlist) -> dict[str, Any]:
+    summary = {
+        "total_interactions": interactions.count(),
+        "likes": interactions.filter(interaction_type="like").count(),
+        "dislikes": interactions.filter(interaction_type="dislike").count(),
+        "watched": interactions.filter(interaction_type="watched").count(),
+        "searches": interactions.filter(interaction_type="search").count(),
+        "watchlist_total": watchlist.count(),
+        "watchlist_watched": watchlist.filter(watched=True).count(),
+        "average_rating": None,
+    }
+
+    avg_rating = interactions.filter(rating__isnull=False).aggregate(avg=Avg("rating"))["avg"]
+    if avg_rating is not None:
+        summary["average_rating"] = round(avg_rating, 1)
+    return summary
+
+
+def _build_recent_activity(interactions):
+    return UserMovieInteractionSerializer(
+        interactions.order_by("-created_at")[:PAGINATION_LIMITS["recent_interactions"]],
+        many=True,
+    ).data
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def personalized_recommendations(request):
@@ -100,10 +131,7 @@ def because_you_watched(request):
     """GET /api/recommendations/because-you-watched/"""
     engine = get_recommendation_engine()
     data = engine.get_because_you_watched(request.user)
-    result = {}
-    for title, movies in data.items():
-        result[title] = TMDBMovieSerializer(movies, many=True).data
-    return Response(result)
+    return Response(_serialize_movie_map(data))
 
 
 @api_view(["GET"])
@@ -173,28 +201,12 @@ def dashboard_stats(request):
     interactions = UserMovieInteraction.objects.filter(user=user)
     watchlist = Watchlist.objects.filter(user=user)
 
-    summary = {
-        "total_interactions": interactions.count(),
-        "likes": interactions.filter(interaction_type="like").count(),
-        "dislikes": interactions.filter(interaction_type="dislike").count(),
-        "watched": interactions.filter(interaction_type="watched").count(),
-        "searches": interactions.filter(interaction_type="search").count(),
-        "watchlist_total": watchlist.count(),
-        "watchlist_watched": watchlist.filter(watched=True).count(),
-        "average_rating": None,
-    }
-
-    avg_rating = interactions.filter(rating__isnull=False).aggregate(avg=Avg("rating"))["avg"]
-    if avg_rating is not None:
-        summary["average_rating"] = round(avg_rating, 1)
+    summary = _build_dashboard_summary(interactions, watchlist)
 
     return Response({
         "summary": summary,
         "genre_distribution": _build_genre_distribution(interactions),
         "preference_scores": _build_preference_scores(user, engine),
         "activity_timeline": _build_activity_timeline(interactions),
-        "recent_activity": UserMovieInteractionSerializer(
-            interactions.order_by("-created_at")[:PAGINATION_LIMITS["recent_interactions"]],
-            many=True,
-        ).data,
+        "recent_activity": _build_recent_activity(interactions),
     })

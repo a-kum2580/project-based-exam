@@ -6,7 +6,6 @@ from rest_framework.response import Response
 from rest_framework.exceptions import APIException
 from django_filters.rest_framework import DjangoFilterBackend
 from django.conf import settings
-from cinequest.utils.param_parser import ParamParser
 from cinequest.utils.error_validator import TMDBErrorValidator
 from cinequest.utils.response_mapper import ResponseMapper
 
@@ -50,6 +49,43 @@ def get_movie_catalog_service(tmdb_service: TMDBService | None = None) -> MovieC
         tmdb_client=resolved_tmdb,
         sync_service=get_movie_sync_service(tmdb_service=resolved_tmdb),
     )
+
+
+def _person_enriched_payload(person, tmdb_data: dict) -> dict:
+    serializer = PersonDetailSerializer(person)
+    payload = serializer.data
+    if tmdb_data:
+        payload["biography"] = tmdb_data.get("biography", payload.get("biography", ""))
+        payload["birthday"] = tmdb_data.get("birthday") or payload.get("birthday")
+        payload["place_of_birth"] = tmdb_data.get("place_of_birth", payload.get("place_of_birth", ""))
+    return payload
+
+
+def _discover_response_payload(data: dict, fallback_page: int) -> dict:
+    serializer = TMDBMovieSerializer(data.get("results", []), many=True)
+    response_payload = {
+        "results": serializer.data,
+        "total_pages": data.get("total_pages", 1),
+        "total_results": data.get("total_results", 0),
+        "page": data.get("page", fallback_page),
+    }
+    if data.get("query"):
+        response_payload["query"] = data["query"]
+    return response_payload
+
+
+def _parse_compare_ids(ids_csv: str) -> list[int]:
+    return [int(value.strip()) for value in ids_csv.split(",") if value.strip().isdigit()]
+
+
+def _fetch_movies_for_comparison(catalog_service: MovieCatalogService, ids: list[int], request) -> list[dict]:
+    movies = []
+    for tmdb_id in ids:
+        data = catalog_service.get_movie_details(tmdb_id)
+        TMDBErrorValidator.ensure_ok(data, request=request, context="compare_movies")
+        if data and "id" in data:
+            movies.append(data)
+    return movies
 
 
 
@@ -149,15 +185,8 @@ class PersonViewSet(viewsets.ReadOnlyModelViewSet):
         person = self.get_object()
         tmdb_service = get_tmdb_service()
         data = tmdb_service.get_person_details(person.tmdb_id)
-        _ensure_tmdb_ok(data, request=request, context="person_enrich")
-
-        serializer = PersonDetailSerializer(person)
-        payload = serializer.data
-        if data:
-            payload["biography"] = data.get("biography", payload.get("biography", ""))
-            payload["birthday"] = data.get("birthday") or payload.get("birthday")
-            payload["place_of_birth"] = data.get("place_of_birth", payload.get("place_of_birth", ""))
-
+        TMDBErrorValidator.ensure_ok(data, request=request, context="person_enrich")
+        payload = _person_enriched_payload(person, data)
         return Response(payload)
 
 
@@ -254,7 +283,7 @@ def movie_detail_tmdb(request, tmdb_id) -> Response:
             raise APIException(detail=str(exc))
 
     data = catalog_service.get_movie_details(tmdb_id)
-    _ensure_tmdb_ok(data, request=request, context="movie_detail")
+    TMDBErrorValidator.ensure_ok(data, request=request, context="movie_detail")
     if not data:
         return error_response("Movie not found", status.HTTP_404_NOT_FOUND)
 
@@ -311,18 +340,7 @@ def discover_filtered(request) -> Response:
     discovery_service = get_discovery_service(tmdb_service)
     filters = discovery_service.parse_request_filters(request.query_params)
     data = discovery_service.discover(filters)
-    serializer = TMDBMovieSerializer(data.get("results", []), many=True)
-
-    response_payload = {
-        "results": serializer.data,
-        "total_pages": data.get("total_pages", 1),
-        "total_results": data.get("total_results", 0),
-        "page": data.get("page", filters["page"]),
-    }
-    if data.get("query"):
-        response_payload["query"] = data["query"]
-
-    return Response(response_payload)
+    return Response(_discover_response_payload(data, fallback_page=filters["page"]))
 
 
 ## movie comparison
@@ -330,20 +348,14 @@ def discover_filtered(request) -> Response:
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def compare_movies(request) -> Response:
-    ids_str = request.query_params.get("ids", "")
-    ids = [int(i.strip()) for i in ids_str.split(",") if i.strip().isdigit()]
+    ids = _parse_compare_ids(request.query_params.get("ids", ""))
 
     compare_limit = PAGINATION_LIMITS["compare_movies"]
     if len(ids) < compare_limit:
         return ResponseMapper.bad_request(f"Provide at least {compare_limit} TMDB IDs: ?ids=550,680")
 
     catalog_service = get_movie_catalog_service()
-    movies = []
-    for tmdb_id in ids[:compare_limit]:
-        data = catalog_service.get_movie_details(tmdb_id)
-        TMDBErrorValidator.ensure_ok(data, request=request, context="compare_movies")
-        if data and "id" in data:
-            movies.append(data)
+    movies = _fetch_movies_for_comparison(catalog_service, ids[:compare_limit], request)
 
     if len(movies) < compare_limit:
         return ResponseMapper.not_found("Could not fetch both movies")

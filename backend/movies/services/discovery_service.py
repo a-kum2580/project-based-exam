@@ -63,108 +63,25 @@ class MovieDiscoveryService:
             return self._discover_without_query(filters)
 
     def _discover_with_query(self, filters: dict) -> dict:
-        cache_payload = {
-            "q": filters["q"],
-            "genre": filters["genre"],
-            "year_from": filters["year_from"],
-            "year_to": filters["year_to"],
-            "rating_min": filters["rating_min"],
-            "runtime_min": filters["runtime_min"],
-            "runtime_max": filters["runtime_max"],
-            "language": filters["language"],
-            "sort": filters["sort"],
-        }
+        cache_payload = self._query_cache_payload(filters)
         cache_key = self._build_cache_key(cache_payload)
-        cached_filtered = self.cache.get(cache_key)
+        cached_payload = self.cache.get(cache_key)
 
-        if cached_filtered:
-            filtered = cached_filtered.get("results", [])
-            page_size = cached_filtered.get("page_size", 20)
+        if cached_payload:
+            filtered = cached_payload.get("results", [])
+            page_size = cached_payload.get("page_size", 20)
         else:
-            first_page_data = self.tmdb.search_movies(filters["q"], page=1)
-            TMDBErrorValidator.ensure_ok(first_page_data)
-
-            total_search_pages = ParamParser.safe_int(first_page_data.get("total_pages", 1), default=1) or 1
-            max_scan_pages = min(total_search_pages, self.max_scan_pages)
-
-            first_page_results = list(first_page_data.get("results", []))
-            page_size = len(first_page_results) or 20
-            target_results = self._target_result_count(
-                requested_page=filters["page"],
-                page_size=page_size,
-            )
-
-            filtered = self._apply_search_filters(first_page_results, filters)
-            empty_pages = 0 if filtered else 1
-
-            for scan_page in range(2, max_scan_pages + 1):
-                if self._should_stop_scan(
-                    current_count=len(filtered),
-                    target_count=target_results,
-                    empty_pages=empty_pages,
-                ):
-                    break
-
-                page_data = self.tmdb.search_movies(filters["q"], page=scan_page)
-                TMDBErrorValidator.ensure_ok(page_data)
-                page_results = page_data.get("results", [])
-                if not page_results:
-                    break
-
-                newly_filtered = self._apply_search_filters(page_results, filters)
-                filtered.extend(newly_filtered)
-                if newly_filtered:
-                    empty_pages = 0
-                else:
-                    empty_pages += 1
-
-            self._sort_movies(filtered, filters["sort"])
+            filtered, page_size = self._scan_query_results(filters)
             self.cache.set(
                 cache_key,
                 {"results": filtered, "page_size": page_size},
                 self.cache_ttl,
             )
 
-        total = len(filtered)
-        total_pages = max(1, (total + page_size - 1) // page_size)
-        current_page = min(max(filters["page"], 1), total_pages)
-        start_index = (current_page - 1) * page_size
-        end_index = start_index + page_size
-        page_results = filtered[start_index:end_index]
-
-        return {
-            "results": page_results,
-            "total_pages": total_pages,
-            "total_results": total,
-            "page": current_page,
-            "query": filters["q"],
-        }
+        return self._build_paginated_query_response(filtered, filters, page_size)
 
     def _discover_without_query(self, filters: dict) -> dict:
-        params = {"page": filters["page"]}
-
-        if filters["genre"]:
-            params["with_genres"] = filters["genre"]
-
-        if filters["year_from"]:
-            params["primary_release_date.gte"] = f"{filters['year_from']}-01-01"
-        if filters["year_to"]:
-            params["primary_release_date.lte"] = f"{filters['year_to']}-12-31"
-
-        if filters["rating_min"]:
-            params["vote_average.gte"] = filters["rating_min"]
-            params["vote_count.gte"] = 50
-
-        if filters["runtime_min"]:
-            params["with_runtime.gte"] = filters["runtime_min"]
-        if filters["runtime_max"]:
-            params["with_runtime.lte"] = filters["runtime_max"]
-
-        if filters["language"]:
-            params["with_original_language"] = filters["language"]
-
-        params["sort_by"] = filters["sort"]
-
+        params = self._build_discover_params(filters)
         data = self.tmdb.discover_movies(**params)
 
         return {
@@ -188,6 +105,7 @@ class MovieDiscoveryService:
 
     def _apply_search_filters(self, all_results: list[dict], filters: dict) -> list[dict]:
         needs_runtime = filters["runtime_min"] is not None or filters["runtime_max"] is not None
+        genre_filter = self._safe_int(filters["genre"], default=None) if filters["genre"] else None
         filtered = []
 
         for movie in all_results:
@@ -196,7 +114,7 @@ class MovieDiscoveryService:
             movie_genres = set(movie.get("genre_ids", []))
             movie_language = movie.get("original_language", "")
 
-            if filters["genre"] and self._safe_int(filters["genre"], default=None) not in movie_genres:
+            if genre_filter is not None and genre_filter not in movie_genres:
                 continue
             if filters["year_from"] and (movie_year is None or movie_year < filters["year_from"]):
                 continue
@@ -217,6 +135,99 @@ class MovieDiscoveryService:
             filtered.append(movie)
 
         return filtered
+
+    def _query_cache_payload(self, filters: dict) -> dict:
+        return {
+            "q": filters["q"],
+            "genre": filters["genre"],
+            "year_from": filters["year_from"],
+            "year_to": filters["year_to"],
+            "rating_min": filters["rating_min"],
+            "runtime_min": filters["runtime_min"],
+            "runtime_max": filters["runtime_max"],
+            "language": filters["language"],
+            "sort": filters["sort"],
+        }
+
+    def _scan_query_results(self, filters: dict) -> tuple[list[dict], int]:
+        first_page_data = self.tmdb.search_movies(filters["q"], page=1)
+        TMDBErrorValidator.ensure_ok(first_page_data)
+
+        total_search_pages = ParamParser.safe_int(first_page_data.get("total_pages", 1), default=1) or 1
+        max_scan_pages = min(total_search_pages, self.max_scan_pages)
+
+        first_page_results = list(first_page_data.get("results", []))
+        page_size = len(first_page_results) or 20
+        target_results = self._target_result_count(
+            requested_page=filters["page"],
+            page_size=page_size,
+        )
+
+        filtered = self._apply_search_filters(first_page_results, filters)
+        empty_pages = 0 if filtered else 1
+
+        for scan_page in range(2, max_scan_pages + 1):
+            if self._should_stop_scan(
+                current_count=len(filtered),
+                target_count=target_results,
+                empty_pages=empty_pages,
+            ):
+                break
+
+            page_data = self.tmdb.search_movies(filters["q"], page=scan_page)
+            TMDBErrorValidator.ensure_ok(page_data)
+            page_results = page_data.get("results", [])
+            if not page_results:
+                break
+
+            newly_filtered = self._apply_search_filters(page_results, filters)
+            filtered.extend(newly_filtered)
+            empty_pages = 0 if newly_filtered else empty_pages + 1
+
+        self._sort_movies(filtered, filters["sort"])
+        return filtered, page_size
+
+    def _build_paginated_query_response(self, filtered: list[dict], filters: dict, page_size: int) -> dict:
+        total = len(filtered)
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        current_page = min(max(filters["page"], 1), total_pages)
+        start_index = (current_page - 1) * page_size
+        end_index = start_index + page_size
+        page_results = filtered[start_index:end_index]
+
+        return {
+            "results": page_results,
+            "total_pages": total_pages,
+            "total_results": total,
+            "page": current_page,
+            "query": filters["q"],
+        }
+
+    def _build_discover_params(self, filters: dict) -> dict:
+        params = {"page": filters["page"]}
+
+        if filters["genre"]:
+            params["with_genres"] = filters["genre"]
+
+        if filters["year_from"]:
+            params["primary_release_date.gte"] = f"{filters['year_from']}-01-01"
+        if filters["year_to"]:
+            params["primary_release_date.lte"] = f"{filters['year_to']}-12-31"
+
+        if filters["rating_min"]:
+            params["vote_average.gte"] = filters["rating_min"]
+            params["vote_count.gte"] = 50
+
+        if filters["runtime_min"]:
+            params["with_runtime.gte"] = filters["runtime_min"]
+        if filters["runtime_max"]:
+            params["with_runtime.lte"] = filters["runtime_max"]
+
+        if filters["language"]:
+            params["with_original_language"] = filters["language"]
+
+        params["sort_by"] = filters["sort"]
+        return params
 
     def _sort_movies(self, movies: list[dict], sort: str):
         sort_map = {

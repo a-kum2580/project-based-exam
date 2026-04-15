@@ -47,6 +47,34 @@
   - **Why**: Reduced duplication, improved readability, and separated responsibilities (parsing, aggregation, formatting).
   - **Impact**: No API contract changes; safer future maintenance.
 
+- **Restructured `MovieDiscoveryService` into a pipeline-style flow**
+  - **Why**: The query branch had become dense again after iterative fixes, making scan/cache/pagination behavior harder to reason about.
+  - **Pattern applied**: **Pipeline + Method Extraction** (each stage has a single responsibility).
+  - **What changed**:
+    - extracted cache-payload builder: `_query_cache_payload(...)`
+    - extracted query-scan stage: `_scan_query_results(...)`
+    - extracted response pagination stage: `_build_paginated_query_response(...)`
+    - extracted discover-params builder: `_build_discover_params(...)`
+  - **Impact**: Behavior preserved, but flow is clearer and safer to modify (cache, scanning, and pagination are now isolated units).
+
+- **Restructured `RecommendationEngine` scoring/recommendation flow into strategy stages**
+  - **Why**: `compute_genre_preferences` and `get_recommendations` had mixed aggregation, normalization, persistence, fallback, and ranking logic.
+  - **Pattern applied**: **Pipeline + Single-Responsibility Method Extraction**.
+  - **What changed**:
+    - added score pipeline helpers: `_accumulate_genre_scores`, `_normalize_genre_scores`, `_persist_genre_preferences`
+    - added recommendation pipeline helpers: `_trending_fallback`, `_seen_movie_ids`, `_collect_top_genre_movies`, `_deduplicate_unseen_movies`, `_strip_internal_scores`
+    - extracted genre map builder: `_build_genre_name_map`
+  - **Impact**: Recommendation algorithm behavior preserved, while each stage is now independently testable and easier to maintain.
+
+- **Refactored recommendations and movie views into orchestrator-style endpoints**
+  - **Why**: Multiple endpoints had inline response assembly/aggregation blocks that obscured intent.
+  - **Pattern applied**: **Controller Thinness / Orchestrator Pattern** with reusable helpers.
+  - **What changed**:
+    - `backend/recommendations/views.py`: extracted `_serialize_movie_map`, `_build_dashboard_summary`, `_build_recent_activity`
+    - `backend/movies/views.py`: extracted `_person_enriched_payload`, `_discover_response_payload`, `_parse_compare_ids`, `_fetch_movies_for_comparison`
+    - standardized TMDB validation calls via `TMDBErrorValidator.ensure_ok(...)` in endpoints
+  - **Impact**: View functions now focus on request orchestration, with transformation logic centralized in helper functions.
+
 ### c) Architecture Changes (structural modifications)
 
 - **Customized JWT token endpoint behavior**
@@ -75,6 +103,7 @@
   - `python manage.py test movies recommendations users` after smells #3-#6 fixes → PASS (51 tests)
   - `python manage.py test movies recommendations users` after smells #7-#17 work → PASS (51 tests)
   - `python manage.py test movies recommendations users` after smells #18-#28 work → PASS (54 tests)
+  - `python manage.py test movies recommendations users` after backend-wide readability restructuring pass → PASS (55 tests)
   - Note: warnings like “Unauthorized”/“Bad Request” appear during tests because negative test cases intentionally validate 401/400 responses.
 
 ### f) Remaining Limitations (known risks / technical debt)
@@ -171,6 +200,15 @@
           - Computes MD5 hash of serialized bytes.
           - Returns key prefixed with `"advanced-filter:"`.
         - Ensures same filter combinations always map to same cache entry, regardless of evaluation order.
+
+      10. Readability restructuring (latest refinement)
+        - Applied a pipeline-style internal flow so `_discover_with_query(...)` now orchestrates only 3 high-level concerns:
+          - cache payload/key resolution (`_query_cache_payload`)
+          - filtered dataset acquisition (`_scan_query_results`)
+          - output shaping (`_build_paginated_query_response`)
+        - Parameter mapping for non-query discovery moved to `_build_discover_params(...)`.
+        - Repeated genre parsing inside filter loops removed by precomputing `genre_filter` once per batch in `_apply_search_filters(...)`.
+        - Net effect: same endpoint contract, improved method-level readability and maintainability.
 
       #### View-layer changes made
 
