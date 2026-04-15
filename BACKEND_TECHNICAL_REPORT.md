@@ -88,6 +88,63 @@
    - **Impact**: Difficult to test individual logic, high regression risk on modifications.
    - **Fix Strategy**: Extract into `MovieDiscoveryService` class with separate methods for filtering, caching, and pagination.
 
+   `MovieDiscoveryService` now divides responsibilities into focused methods:
+
+      1. `parse_request_filters(query_params)`
+        - Normalizes and validates request inputs into one filter dictionary.
+        - Centralizes type-safe parsing for `page`, `year_from`, `year_to`, `rating_min`, `runtime_min`, `runtime_max`.
+
+      2. `discover(filters)`
+        - Entry point deciding between two branches:
+          - query-aware branch (`_discover_with_query`) when `q` is present
+          - discover API branch (`_discover_without_query`) when `q` is absent
+
+      3. `_discover_with_query(filters)`
+        - Builds cache payload from filter options.
+        - Reads/writes cached filtered results.
+        - Fetches and aggregates TMDB search pages when cache miss occurs.
+        - Delegates filtering to `_apply_search_filters` and sorting to `_sort_movies`.
+        - Performs final pagination and returns structured payload.
+
+      4. `_discover_without_query(filters)`
+        - Builds TMDB discover API params from filters.
+        - Calls TMDB discover endpoint directly.
+        - Returns normalized response payload (results/total/pages).
+
+      5. `_apply_search_filters(all_results, filters)`
+        - Applies in-memory filters in one place:
+          - genre match
+          - year range
+          - minimum rating
+          - language
+          - optional runtime constraints (with runtime lookups)
+
+      6. `_sort_movies(movies, sort)`
+        - Encapsulates sorting strategy map and ordering rules.
+
+      7. Internal helpers
+        - `_safe_int` / `_safe_float`: consistent numeric parsing
+        - `_ensure_tmdb_ok`: consistent TMDB error propagation (`APIException`)
+        - `_build_cache_key`: deterministic cache key from sorted serialized payload
+
+      #### View-layer changes made
+
+      `discover_filtered` in `backend/movies/views.py` now has a narrow role:
+      - sync service TMDB client reference
+      - parse filters via service
+      - call service discovery entry point
+      - serialize TMDB movie list
+      - return final response
+
+      This reduced the endpoint from a large, multi-concern block to a compact orchestrator while keeping external API behavior and response keys intact.
+
+      #### Why this is safer long-term
+
+      - **Lower change risk**: modifications to filtering, sorting, or caching can be done in isolated methods.
+      - **Better testability**: each method can be tested independently with focused fixtures/mocks.
+      - **Clear ownership**: views manage HTTP lifecycle; service manages discovery domain logic.
+      - **Easier extension**: adding new filters now involves extending parser + filter method rather than editing one very long function.
+
 2. **Linear Scan of 500 TMDB Pages**
    - **Location**: `backend/movies/views.py:390-410`
    - **Issue**: `discover_filtered` scans up to 500 pages sequentially for search results (~10,000 movies).
