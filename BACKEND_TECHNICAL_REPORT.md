@@ -78,6 +78,200 @@
 - **External dependency behavior**: TMDB failures now surface more clearly, but further work could standardise 502/503 responses across *all* endpoints that call TMDB.
 - **DB config**: `DATABASE_URL` is supported, but local development still defaults to SQLite; production hardening (e.g., strict env requirements, per-env settings) would still be needed for deployment.
 
+### g) Code Smells & Technical Debt (28 identified issues)
+
+#### **HIGH SEVERITY** (affects correctness/security/performance)
+
+1. **Giant Function: `discover_filtered` (~150 lines)**
+   - **Location**: `backend/movies/views.py:350-490`
+   - **Issue**: Combines multiple responsibilities—parameter extraction, caching strategy, search filtering, pagination, and sorting—in one function.
+   - **Impact**: Difficult to test individual logic, high regression risk on modifications.
+   - **Fix Strategy**: Extract into `MovieDiscoveryService` class with separate methods for filtering, caching, and pagination.
+
+2. **Linear Scan of 500 TMDB Pages**
+   - **Location**: `backend/movies/views.py:390-410`
+   - **Issue**: `discover_filtered` scans up to 500 pages sequentially for search results (~10,000 movies).
+   - **Impact**: Response time could exceed 30+ seconds; API throttling/rate limit risks.
+   - **Fix Strategy**: Implement pagination cap (max 5 pages); use filters server-side to reduce result set upfront.
+
+3. **GET Endpoint That Mutates Database**
+   - **Location**: `backend/movies/views.py:122-135` (`PersonViewSet.enrich`)
+   - **Issue**: `@action(detail=True, methods=["get"])` performs `.save()` on the person model.
+   - **Impact**: Violates REST principles; idempotent GET requests should not have side effects.
+   - **Fix Strategy**: Convert to POST endpoint or make enrichment on-demand without persistence.
+
+4. **Missing Pagination Boundary Checks**
+   - **Location**: Throughout views (especially `discover_filtered`)
+   - **Issue**: `page` parameter not validated for negative values or absurd ranges (e.g., `?page=-999` or `?page=99999`).
+   - **Impact**: Invalid queries could bypass caching or cause unexpected API calls.
+   - **Fix Strategy**: Add validation: `if page < 1: page = 1` and `if page > max_pages: page = max_pages`.
+
+5. **Weak Exception Handling in `sync_movie`**
+   - **Location**: `backend/movies/services/tmdb_service.py:165-200`
+   - **Issue**: Returns `None` silently without distinguishing between TMDB API failure and invalid data.
+   - **Impact**: Caller doesn't know root cause; harder to retry or handle gracefully.
+   - **Fix Strategy**: Raise custom exceptions (`TMDBAPIError`, `MovieNotFoundError`) with context.
+
+6. **Service Class Not Following Dependency Injection**
+   - **Location**: `backend/movies/views.py:19-20`, `backend/recommendations/views.py:20`
+   - **Issue**: Global singleton instances (`tmdb = TMDBService()`, `engine = RecommendationEngine()`) created at module level.
+   - **Impact**: Difficult to mock in tests; potential state sharing across requests.
+   - **Fix Strategy**: Create instances per-request or inject via view initialization.
+
+#### **MEDIUM SEVERITY** (affects maintainability/scalability)
+
+7. **Hard-Coded Mood Genre IDs**
+   - **Location**: `backend/movies/views.py:240-330` (`MOOD_MAP`)
+   - **Issue**: ~90 lines of hard-coded genre IDs (e.g., `"genres": "28,53,80"`) with manual comment mapping.
+   - **Impact**: Changes require code updates; no central management; error-prone.
+   - **Fix Strategy**: Move `MOOD_MAP` to a dedicated config module or database model (`Mood` table).
+
+8. **Duplicate URL Building Logic**
+   - **Location**: `backend/movies/models.py:104-125` (properties) and `backend/movies/serializers.py:141-149` (serializer methods)
+   - **Issue**: TMDB image URL construction repeated in 2+ places.
+   - **Impact**: Brittle when base URL changes; maintainability risk.
+   - **Fix Strategy**: Create single utility function `build_tmdb_image_url(path, size)` in a shared module.
+
+9. **Duplicate Query Parameter Extraction**
+   - **Location**: Multiple endpoints (`search_movies`, `trending_movies`, `mood_movies`, etc.)
+   - **Issue**: Repeated code: `page = safe_int(request.query_params.get("page", 1))` and similar patterns.
+   - **Impact**: If validation logic changes, must update 10+ places; inconsistency risk.
+   - **Fix Strategy**: Create request parameter parser utility (`RequestParams` class or decorator).
+
+10. **Large Static Dictionary at Module Level**
+    - **Location**: `backend/movies/views.py:240-330` (`MOOD_MAP`)
+    - **Issue**: 90+ lines defining 10+ moods with nested dicts.
+    - **Impact**: Not DRY; hard to extend; should be configuration or database-backed.
+    - **Fix Strategy**: Move to `config/moods.py` or as a database model.
+
+11. **Missing N+1 Query in PersonDetailSerializer**
+    - **Location**: `backend/movies/serializers.py:34-41` (`get_acted_movies`, `get_directed_movies`)
+    - **Issue**: Calls `MovieCompactSerializer(movies, many=True)`, which in turn calls `.count()` on genres for each movie.
+    - **Impact**: If a person has 20 movies with 5 genres each → 100+ extra DB queries.
+    - **Fix Strategy**: Use `select_related` / `prefetch_related` in serializer or call `.only()` to limit fields.
+
+12. **Hard-Coded Pagination Limits (10 vs 20)**
+    - **Location**: Multiple files—`serializers.py:34-41` ([:20]), `engine.py:140` ([:10]), `views.py:195` ([:10])
+    - **Issue**: Inconsistent limits without configuration or constants.
+    - **Impact**: Can't adjust pagination globally; hard to debug why different endpoints return different result counts.
+    - **Fix Strategy**: Define `PAGINATION_LIMITS` constant dict in settings; use consistently.
+
+13. **Inconsistent Error Response Shapes**
+    - **Location**: Throughout views
+    - **Issue**: Some endpoints return `{"error": "..."}`, others `{"results": [...], ...}`, some include `query`, others don't.
+    - **Impact**: Frontend must handle multiple response schemas; fragile integration.
+    - **Fix Strategy**: Define standardized response envelope (e.g., `APIResponse` serializer).
+
+14. **Repeated URL Building in Serializers**
+    - **Location**: `backend/movies/serializers.py:141-149` (`TMDBMovieSerializer.to_representation`)
+    - **Issue**: Hard-codes base URL string instead of using settings.
+    - **Impact**: If URL changes, must update multiple files.
+    - **Fix Strategy**: Use centralized utility function (see #8).
+
+15. **Missing Type Hints**
+    - **Location**: `backend/movies/views.py`, `backend/recommendations/services/engine.py`
+    - **Issue**: Functions lack return type annotations (e.g., `def mood_movies(request, mood_slug):` should be `-> Response`).
+    - **Impact**: IDE autocomplete limited; harder to catch type errors.
+    - **Fix Strategy**: Add return types to all view functions and service methods.
+
+#### **LOW SEVERITY** (technical debt / code quality)
+
+16. **Cache Key Collision Risk**
+    - **Location**: `backend/movies/views.py:39` (`build_advanced_filter_cache_key`)
+    - **Issue**: Uses `f"tmdb:{endpoint}:{params}"` where `params` is a dict—dict string representation not deterministic.
+    - **Impact**: Parameter order variations could fail cache lookup.
+    - **Fix Strategy**: Use `json.dumps(params, sort_keys=True)` for deterministic serialization.
+
+17. **Unused/Redundant Movie Serializer Properties**
+    - **Location**: `backend/movies/serializers.py:117-149`
+    - **Issue**: `TMDBMovieSerializer` includes `backdrop_url`, `poster_url_small`, `trailer_embed_url`, `year`—unclear if frontend uses all.
+    - **Impact**: Dead code accumulation; technical debt.
+    - **Fix Strategy**: Audit frontend usage; remove unused fields or document why they're kept.
+
+18. **TMDB API Error Propagation Inconsistent**
+    - **Location**: Various endpoints
+    - **Issue**: Some use `_ensure_tmdb_ok(data)`, others check `.get("results", [])` without verifying `_error` key.
+    - **Impact**: Some failures silently return empty results; inconsistent UX.
+    - **Fix Strategy**: Use consistent error checking pattern across all endpoints.
+
+19. **Boundary Conditions Not Tested**
+    - **Location**: `backend/recommendations/services/engine.py:95-120` (`get_recommendations`)
+    - **Issue**: If user has < 3 genres, uses all; if 0, falls back silently to trending. No explicit error handling.
+    - **Impact**: Edge cases could be buggy; untested scenarios.
+    - **Fix Strategy**: Add explicit checks and test coverage for zero/one/few preference cases.
+
+20. **WatchProvider Model Unused Country Field**
+    - **Location**: `backend/movies/models.py` (`WatchProvider.country_code`)
+    - **Issue**: Field always "US"; never used for filtering or multi-country support.
+    - **Impact**: Misleading DB schema; dead code.
+    - **Fix Strategy**: Remove or implement country-based filtering globally.
+
+21. **JSONField Default Mutable Object**
+    - **Location**: `backend/users/models.py:7`, `backend/recommendations/models.py:20`
+    - **Issue**: `default=list` (though DRF handles this correctly in modern Django).
+    - **Impact**: Technically correct but confusing; could cause issues if model used outside DRF context.
+    - **Fix Strategy**: Use `default=list` callable or explicit `default=[]` with clarifying comment.
+
+22. **Router Registration Name Confusing**
+    - **Location**: `backend/movies/urls.py:6` (`router.register(r"list", ...)`)
+    - **Issue**: Endpoint is `/api/movies/list/` not `/api/movies/`; naming suggests it's a subpath.
+    - **Impact**: Confusing API structure for consumers; inconsistent with REST conventions.
+    - **Fix Strategy**: Register as `r""` (empty) to use `/api/movies/` + `/api/movies/{id}/`.
+
+23. **Regex Password Validation Overly Lenient**
+    - **Location**: `backend/users/serializers.py:26`
+    - **Issue**: `re.search(r"[^A-Za-z0-9]", password)` allows any non-alphanumeric (space, newline, etc.).
+    - **Impact**: Could accept weak passwords like `A ` or `A\n`.
+    - **Fix Strategy**: Define allowed special characters set: `if not re.search(r"[!@#$%^&*()_+\-=\[\]{};':\",.<>?]", password)`
+
+24. **Missing Request Logging/Tracing**
+    - **Location**: All view functions
+    - **Issue**: Failed TMDB calls only logged at service level; no request-level tracing.
+    - **Impact**: Debugging production issues difficult; no correlation IDs.
+    - **Fix Strategy**: Add request ID middleware; log all external API calls with context.
+
+25. **Genre Preference Computation Inefficient**
+    - **Location**: `backend/recommendations/services/engine.py:50-55`
+    - **Issue**: Nested loop iterates through all interactions and genre_ids multiple times.
+    - **Impact**: O(n*m) complexity; slow for users with many interactions.
+    - **Fix Strategy**: Use set operations and aggregation to reduce iterations.
+
+26. **Hardcoded Movie Comparison Limit**
+    - **Location**: `backend/movies/views.py:410` (`[:2]`)
+    - **Issue**: Only compares first 2 movies; hard-coded without explanation.
+    - **Impact**: Can't extend to compare 3+ movies without code change.
+    - **Fix Strategy**: Make configurable via query param or constant.
+
+27. **Unused Import: `hashlib`**
+    - **Location**: `backend/movies/views.py:3`
+    - **Issue**: Imported but not used (MD5 hashing deferred to cache key builder).
+    - **Impact**: Code clutter; if `build_advanced_filter_cache_key` is modified, this becomes needed.
+    - **Fix Strategy**: Remove or document why it's imported.
+
+28. **Validation Regex Patterns Duplicated**
+    - **Location**: `backend/users/serializers.py:26-28`
+    - **Issue**: Email regex pattern hard-coded; special character regex hard-coded.
+    - **Impact**: If validation rules change, must update in multiple places.
+    - **Fix Strategy**: Define as module-level constants (`EMAIL_PATTERN`, `SPECIAL_CHAR_PATTERN`).
+
+---
+
+#### **Summary of Debt by Category**
+
+| Severity | Count | Key Areas |
+|----------|-------|-----------|
+| High     | 6     | Performance (500-page scan), REST violations, exception handling, DI patterns |
+| Medium   | 9     | Code duplication, maintainability, schema consistency, N+1 queries |
+| Low      | 13    | Technical debt, unused code, configuration, logging |
+| **Total** | **28** | **Across views, services, models, serializers** |
+
+#### **Recommended Priority for Fixes**
+
+1. **Immediate** (blocks scaling/correctness): #2 (500-page scan), #3 (GET mutation), #5 (exception handling), #6 (global singletons)
+2. **Short-term** (improves stability): #1 (giant function), #9 (duplicate params), #12 (pagination limits), #18 (error consistency)
+3. **Medium-term** (tech debt): #7 (mood config), #8 (URL building), #11 (N+1), #15 (type hints), #25 (perf)
+4. **Long-term** (nice-to-have): #16, #17, #20, #21, #22, #27, #28 (cleanup/polish)
+
 ### Limitations addressed during development (closed)
 
 - **Mixed auth modes**: removed SessionAuthentication to avoid CSRF/session confusion in a JWT SPA.
