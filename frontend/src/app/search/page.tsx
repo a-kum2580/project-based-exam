@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Search, SlidersHorizontal, X, Loader2, ChevronDown } from "lucide-react";
 import MovieCard, { MovieCardSkeleton } from "@/components/MovieCard";
 import { moviesAPI } from "@/lib/api";
@@ -39,6 +39,7 @@ const GENRE_LIST = [
 
 function SearchContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const initialQuery = searchParams.get("q") || "";
   const sortParam = searchParams.get("sort") || "";
 
@@ -79,15 +80,17 @@ function SearchContent() {
   }, [initialQuery]);
 
   async function performSearch(q: string, p: number) {
-    if (!q.trim()) return;
+    const normalizedQuery = q.trim();
+    if (!normalizedQuery) return;
     setLoading(true);
     try {
-      const data = await moviesAPI.search(q, p);
+      const data = await moviesAPI.search(normalizedQuery, p);
       setResults(data?.results || []);
       setTotalPages(data?.total_pages || 1);
       setTotalResults(data?.total_results || 0);
       setPage(p);
-      setCurrentSearchQuery(q);
+      setQuery(normalizedQuery);
+      setCurrentSearchQuery(normalizedQuery);
     } catch (err) {
       console.error(err);
       setResults([]);
@@ -172,10 +175,11 @@ function SearchContent() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (query.trim()) {
-      resetFiltersForNewSearch();
-      performSearch(query, 1);
-    }
+    const normalizedQuery = query.trim();
+    if (!normalizedQuery) return;
+
+    resetFiltersForNewSearch();
+    router.push(`/search?q=${encodeURIComponent(normalizedQuery)}`);
   }
 
   function handlePageChange(newPage: number) {
