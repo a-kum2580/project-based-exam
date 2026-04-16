@@ -35,7 +35,14 @@ describe('MovieCarousel Rendering & Interaction', () => {
     expect(screen.getByText('Interstellar')).toBeInTheDocument();
 
     // Mock HTML element scrollBy method (JSDOM doesn't implement this by default)
-    window.HTMLElement.prototype.scrollBy = jest.fn();
+    const scrollByMock = jest.fn();
+    window.HTMLElement.prototype.scrollBy = scrollByMock;
+
+    // Mock clientWidth since JSDOM defaults layout properties to 0
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      value: 494, // 494 * 0.85 = 419.9 => rounded to 420
+    });
 
     // Test user interactions on the control buttons
     const leftButton = screen.getByLabelText('Scroll left');
@@ -43,10 +50,15 @@ describe('MovieCarousel Rendering & Interaction', () => {
     
     // Scroll Right
     fireEvent.click(rightButton);
-    expect(window.HTMLElement.prototype.scrollBy).toHaveBeenCalledWith(expect.objectContaining({ left: 420 }));
+    expect(scrollByMock).toHaveBeenCalledTimes(1);
+    expect(scrollByMock).toHaveBeenCalledWith(expect.objectContaining({ left: 420 }));
     
+    // Reset mock for the next interaction to ensure isolation
+    scrollByMock.mockClear();
+
     // Scroll Left
     fireEvent.click(leftButton);
-    expect(window.HTMLElement.prototype.scrollBy).toHaveBeenCalledWith(expect.objectContaining({ left: -420 }));
+    expect(scrollByMock).toHaveBeenCalledTimes(1);
+    expect(scrollByMock).toHaveBeenCalledWith(expect.objectContaining({ left: -420 }));
   });
 });
