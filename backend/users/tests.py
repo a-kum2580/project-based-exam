@@ -139,6 +139,27 @@ class JWTAuthTest(APITestCase):
         self.assertIn("access", response.data)
         self.assertIn("refresh", response.data)
 
+    def test_obtain_token_trims_identifier_whitespace(self):
+        response = self.client.post(
+            "/api/auth/token/",
+            {"username": "  testuser  ", "password": "testpass123"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+        self.assertIn("refresh", response.data)
+
+    def test_obtain_token_accepts_email_identifier(self):
+        self.user.email = "testuser@example.com"
+        self.user.save(update_fields=["email"])
+
+        response = self.client.post(
+            "/api/auth/token/",
+            {"username": "TESTUSER@example.com", "password": "testpass123"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+        self.assertIn("refresh", response.data)
+
     def test_token_wrong_password(self):
         response = self.client.post(
             "/api/auth/token/",
