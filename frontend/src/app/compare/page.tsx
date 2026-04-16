@@ -11,7 +11,6 @@ import { moviesAPI } from "@/lib/api";
 import { posterUrl, formatRuntime, formatCurrency, ratingColor } from "@/lib/utils";
 import type { MovieCompact } from "@/types/movie";
 
-<<<<<<< Charis-frontend
 /**
  * Reusable component for displaying comparison bars.
  */
@@ -23,9 +22,6 @@ interface CompareBarProps {
 }
 
 function CompareBar({ label, valueA, valueB, higher }: CompareBarProps) {
-=======
-function CompareBar({ label, valueA, valueB, higher }: { label: string; valueA: number; valueB: number; higher: "higher" | "lower" }) {
->>>>>>> main
   const max = Math.max(valueA, valueB, 1);
   const pctA = (valueA / max) * 100;
   const pctB = (valueB / max) * 100;
@@ -61,7 +57,6 @@ function CompareBar({ label, valueA, valueB, higher }: { label: string; valueA: 
   );
 }
 
-<<<<<<< Charis-frontend
 /**
  * Reusable component for searching and displaying a selected movie.
  */
@@ -77,9 +72,6 @@ interface MovieSelectorProps {
 }
 
 function MovieSelector({ side, results, searching, movie, inputRef, onSearch, onSelect, onClear }: MovieSelectorProps) {
-=======
-function MovieSelector({ side, search, setSearch, results, searching, movie, clear, onSearch, onSelect }: any) {
->>>>>>> main
   return (
     <div className="flex-1 min-w-0">
       {movie ? (
@@ -95,11 +87,7 @@ function MovieSelector({ side, search, setSearch, results, searching, movie, cle
               />
             </div>
             <button
-<<<<<<< Charis-frontend
               onClick={onClear}
-=======
-              onClick={clear}
->>>>>>> main
               className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-surface-3 border border-white/10 flex items-center justify-center text-white/40 hover:text-white hover:bg-red-500/20 transition-colors"
             >
               <X className="w-3 h-3" />
@@ -116,18 +104,9 @@ function MovieSelector({ side, search, setSearch, results, searching, movie, cle
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25" />
             <input
-<<<<<<< Charis-frontend
               ref={inputRef}
               type="text"
               onChange={(e) => onSearch(e.target.value, side)}
-=======
-              type="text"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                onSearch(e.target.value, side);
-              }}
->>>>>>> main
               placeholder={`Search movie ${side}...`}
               className="w-full h-12 pl-11 pr-4 rounded-xl bg-surface-2 border border-white/[0.08] text-white placeholder:text-white/20 outline-none focus:border-gold/40 transition-all text-sm font-body"
             />
@@ -136,28 +115,16 @@ function MovieSelector({ side, search, setSearch, results, searching, movie, cle
 
           {results.length > 0 && (
             <div className="absolute top-14 left-0 right-0 glass-card rounded-xl p-1.5 z-20 shadow-xl animate-fade-in">
-<<<<<<< Charis-frontend
               {results.map((result: any) => (
                 <button
                   key={result.id || result.tmdb_id}
                   onClick={() => onSelect(result.tmdb_id || result.id, side)}
-=======
-              {results.map((m: any) => (
-                <button
-                  key={m.id || m.tmdb_id}
-                  onClick={() => onSelect(m.tmdb_id || m.id, side)}
->>>>>>> main
                   className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-white/5 text-left transition-colors"
                 >
                   <div className="w-8 h-12 rounded bg-surface-3 overflow-hidden flex-shrink-0">
                     <Image
-<<<<<<< Charis-frontend
                       src={posterUrl(result.poster_url || result.poster_path, "w185")}
                       alt={result.title}
-=======
-                      src={posterUrl(m.poster_url || m.poster_path, "w185")}
-                      alt={m.title}
->>>>>>> main
                       width={32}
                       height={48}
                       className="w-full h-full object-cover"
@@ -165,24 +132,15 @@ function MovieSelector({ side, search, setSearch, results, searching, movie, cle
                     />
                   </div>
                   <div className="min-w-0">
-<<<<<<< Charis-frontend
                     <p className="text-sm font-medium truncate">{result.title}</p>
                     <p className="text-[11px] text-white/30">{result.year}</p>
-=======
-                    <p className="text-sm font-medium truncate">{m.title}</p>
-                    <p className="text-[11px] text-white/30">{m.year}</p>
->>>>>>> main
                   </div>
                 </button>
               ))}
             </div>
           )}
 
-<<<<<<< Charis-frontend
           {results.length === 0 && (
-=======
-          {!search && (
->>>>>>> main
             <div className="mt-6 text-center">
               <div className="w-14 h-20 rounded-lg border-2 border-dashed border-white/10 flex items-center justify-center mx-auto mb-3">
                 <Search className="w-5 h-5 text-white/10" />
@@ -196,7 +154,6 @@ function MovieSelector({ side, search, setSearch, results, searching, movie, cle
   );
 }
 
-<<<<<<< Charis-frontend
 /**
  * Displays a list of genres, aligned to the start or end.
  */
@@ -264,8 +221,6 @@ function CastList({ cast, align }: CastListProps) {
   return <div className="flex-1 space-y-1.5">{(cast || []).slice(0, 5).map((castMember) => <CastMemberCard key={castMember.id} member={castMember} align={align} />)}</div>;
 }
 
-=======
->>>>>>> main
 export default function ComparePage() {
   const [resultsA, setResultsA] = useState<MovieCompact[]>([]);
   const [resultsB, setResultsB] = useState<MovieCompact[]>([]);
@@ -352,7 +307,6 @@ export default function ComparePage() {
     }
   }
 
-<<<<<<< Charis-frontend
   function swapMovies() {
     if (!movieA || !movieB) return;
 
@@ -370,8 +324,6 @@ export default function ComparePage() {
     setResultsA(resultsB);
     setResultsB(resultsA);
   }
-=======
->>>>>>> main
 
   const bothSelected = movieA && movieB;
 
@@ -398,16 +350,10 @@ export default function ComparePage() {
           results={resultsA}
           searching={searchingA}
           movie={movieA}
-<<<<<<< Charis-frontend
           inputRef={inputRefA}
           onSearch={debouncedSearch}
           onSelect={selectMovie}
           onClear={() => setMovieA(null)}
-=======
-          clear={() => setMovieA(null)}
-          onSearch={searchMovies}
-          onSelect={selectMovie}
->>>>>>> main
         />
 
         <div className="flex-shrink-0 pt-8">
@@ -426,16 +372,10 @@ export default function ComparePage() {
           results={resultsB}
           searching={searchingB}
           movie={movieB}
-<<<<<<< Charis-frontend
           inputRef={inputRefB}
           onSearch={debouncedSearch}
           onSelect={selectMovie}
           onClear={() => setMovieB(null)}
-=======
-          clear={() => setMovieB(null)}
-          onSearch={searchMovies}
-          onSelect={selectMovie}
->>>>>>> main
         />
       </div>
 
