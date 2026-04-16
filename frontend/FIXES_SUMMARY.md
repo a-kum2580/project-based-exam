@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Frontend Bug Fixes Summary
 
 This document outlines the recent bug fixes applied to the frontend application to resolve runtime crashes, prop mismatches, and UI visibility issues.
@@ -36,5 +35,3 @@ To improve maintainability, eliminate code smells, and follow React best practic
 *   **`src/app/page.tsx`**:
     *   Extracted the repeated section divider HTML into a DRY `SectionDivider` component.
     *   Renamed unclear variables (`trendRes`, `npRes`, `trRes`) to explicit names (`trendingRes`, `nowPlayingRes`, `topRatedRes`).
-=======
->>>>>>> 78982eebab00255fbfa8d41b349f7eb29da695d9

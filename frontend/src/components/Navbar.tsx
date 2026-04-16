@@ -20,6 +20,7 @@ export default function Navbar() {
   const navLinks = [
     { href: "/search", label: "Discover", icon: Compass },
     { href: "/genre", label: "Genres", icon: Clapperboard },
+    { href: "/trivia", label: "Trivia", icon: Film },
     { href: "/mood", label: "Mood", icon: Sparkles },
     { href: "/compare", label: "Compare", icon: ArrowLeftRight },
     { href: "/search?sort=top_rated", label: "Top Rated", icon: Star },

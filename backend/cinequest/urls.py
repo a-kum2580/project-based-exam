@@ -42,6 +42,9 @@ def api_root(request):
                 "watchlist": "/api/recommendations/watchlist/",
                 "dashboard": "/api/recommendations/dashboard/",
             },
+            "trivia": {
+                "daily": "/api/trivia/daily/",
+            },
         },
     })
 
@@ -54,4 +57,5 @@ urlpatterns = [
     path("api/users/", include("users.urls")),
     path("api/movies/", include("movies.urls")),
     path("api/recommendations/", include("recommendations.urls")),
+    path("api/trivia/", include("trivia.urls")),
 ]
