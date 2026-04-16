@@ -119,6 +119,23 @@ def _build_activity_timeline(interactions_qs, days=30) -> list[dict[str, Any]]:
     return [{"date": str(d["date"]), "count": d["count"]} for d in daily]
 
 
+def _build_activity_details(interactions_qs, days=31) -> list[dict[str, Any]]:
+    """Return detailed interaction rows for the last N days grouped by date on the client."""
+    start = timezone.now() - timedelta(days=days)
+    rows = interactions_qs.filter(created_at__gte=start).order_by("-created_at")
+
+    details = []
+    for row in rows:
+        details.append({
+            "date": str(row.created_at.date()),
+            "movie_tmdb_id": row.movie_tmdb_id,
+            "movie_title": row.movie_title,
+            "interaction_type": row.interaction_type,
+            "created_at": row.created_at,
+        })
+    return details
+
+
 def _build_preference_scores(user, engine, limit=10) -> list[dict[str, Any]]:
     """Compute and return top-N saved preference scores for the user."""
     from movies.models import Genre
@@ -380,6 +397,7 @@ def dashboard_stats(request):
         "genre_distribution": _build_genre_distribution(interactions),
         "preference_scores": _build_preference_scores(user, engine),
         "activity_timeline": _build_activity_timeline(interactions),
+        "activity_details": _build_activity_details(interactions),
         "recent_activity": _build_recent_activity(interactions),
         "liked_movies": _build_liked_movies(interactions),
         "disliked_movies": _build_disliked_movies(interactions),

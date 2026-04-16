@@ -9,8 +9,6 @@ import {
 import { useAuth } from "@/lib/AuthContext";
 import { recommendationsAPI } from "@/lib/api";
 
-const LOCAL_ACTIVITY_LOG_KEY = "cq_activity_log_days";
-
 function formatLocalDate(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -18,29 +16,12 @@ function formatLocalDate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-function getLocalActivityDaysInLast30(): string[] {
-  if (typeof window === "undefined") return [];
-
-  try {
-    const raw = localStorage.getItem(LOCAL_ACTIVITY_LOG_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    const days = Array.isArray(parsed) ? parsed.filter((v) => typeof v === "string") : [];
-
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 29);
-    const cutoffStr = formatLocalDate(cutoff);
-
-    return days.filter((day) => day >= cutoffStr);
-  } catch {
-    return [];
-  }
-}
-
 export default function DashboardPage() {
   const { user, isAuthenticated, loading: authLoading } = useAuth();
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeList, setActiveList] = useState<"liked" | "disliked" | "watched" | "watchlist" | null>(null);
+  const [selectedActivityDate, setSelectedActivityDate] = useState<string | null>(null);
   const listPanelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -108,6 +89,7 @@ export default function DashboardPage() {
   const totalGenreCount = genreDistData.total_genres || 0;
   const prefScores = stats?.preference_scores || [];
   const timeline = stats?.activity_timeline || [];
+  const activityDetails = stats?.activity_details || [];
   const recent = stats?.recent_activity || [];
   const likedMovies = stats?.liked_movies || [];
   const dislikedMovies = stats?.disliked_movies || [];
@@ -115,21 +97,35 @@ export default function DashboardPage() {
   const watchlistMovies = stats?.watchlist_movies || [];
   const maxGenreCount = Math.max(...genreDist.map((g: any) => g.count), 1);
   const maxPrefWeight = Math.max(...prefScores.map((p: any) => p.weight), 1);
-  const localActivityDays = getLocalActivityDaysInLast30();
 
   const mergedTimelineMap = new Map<string, number>();
   timeline.forEach((day: any) => {
     mergedTimelineMap.set(day.date, Number(day.count) || 0);
   });
-  localActivityDays.forEach((day) => {
-    mergedTimelineMap.set(day, (mergedTimelineMap.get(day) || 0) + 1);
-  });
 
   const mergedTimeline = Array.from(mergedTimelineMap.entries())
     .map(([date, count]) => ({ date, count }))
     .sort((a, b) => a.date.localeCompare(b.date));
-  const activeDays = mergedTimeline.filter((day) => day.count > 0).length;
-  const hasAnyActivity = (summary.total_interactions || 0) > 0 || mergedTimeline.length > 0;
+
+  const now = new Date();
+  const activityYear = now.getFullYear();
+  const activityMonth = now.getMonth();
+  const activityMonthLabel = now.toLocaleString(undefined, { month: "long", year: "numeric" });
+  const daysInActivityMonth = new Date(activityYear, activityMonth + 1, 0).getDate();
+
+  const monthlyTimeline = Array.from({ length: daysInActivityMonth }, (_, index) => {
+    const dayNumber = index + 1;
+    const date = formatLocalDate(new Date(activityYear, activityMonth, dayNumber));
+    return {
+      date,
+      dayNumber,
+      count: mergedTimelineMap.get(date) || 0,
+    };
+  });
+
+  const maxMonthlyCount = Math.max(...monthlyTimeline.map((day) => day.count), 1);
+  const activeDays = monthlyTimeline.filter((day) => day.count > 0).length;
+  const hasAnyActivity = (summary.total_interactions || 0) > 0 || activeDays > 0;
 
   const interactionWeightKey = [
     { type: "Like", weight: "+5.0", color: "text-emerald-400" },
@@ -174,6 +170,15 @@ export default function DashboardPage() {
       listPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
+
+  function openActivityDialog(date: string, count: number) {
+    if (count <= 0) return;
+    setSelectedActivityDate(date);
+  }
+
+  const selectedDayActivities = selectedActivityDate
+    ? activityDetails.filter((item: any) => item.date === selectedActivityDate)
+    : [];
 
   return (
     <div className="pt-24 pb-20 px-6 md:px-10 lg:px-20 max-w-[1440px] mx-auto">
@@ -364,34 +369,97 @@ export default function DashboardPage() {
       </div>
 
       {/* Activity timeline */}
-      {mergedTimeline.length > 0 && (
+      {monthlyTimeline.length > 0 && (
         <div className="glass-card rounded-xl p-6 mb-10">
           <div className="flex items-center gap-2 mb-5">
             <Clock className="w-4 h-4 text-gold" />
-            <h2 className="text-lg font-bold font-display">Activity (Last 30 Days)</h2>
+            <h2 className="text-lg font-bold font-display">Activity - {activityMonthLabel}</h2>
             <span className="text-xs text-white/30 ml-auto">{activeDays} active days</span>
           </div>
-          <div className="flex items-end gap-1 h-32">
-            {mergedTimeline.map((day: any) => {
-              const maxCount = Math.max(...mergedTimeline.map((d: any) => d.count), 1);
-              const height = (day.count / maxCount) * 100;
+          <p className="text-xs text-white/35 mb-3">Bars show total interactions per day.</p>
+          <div className="flex items-end gap-1 h-36">
+            {monthlyTimeline.map((day: any) => {
+              const height = (day.count / maxMonthlyCount) * 100;
               return (
                 <div
                   key={day.date}
-                  className="flex-1 group relative"
+                  className={`flex-1 group relative h-full ${day.count > 0 ? "cursor-pointer" : "cursor-default"}`}
                   title={`${day.date}: ${day.count} interactions`}
+                  onClick={() => openActivityDialog(day.date, day.count)}
+                  role="button"
+                  aria-disabled={day.count <= 0}
+                  tabIndex={day.count > 0 ? 0 : -1}
+                  onKeyDown={(e) => {
+                    if (day.count > 0 && (e.key === "Enter" || e.key === " ")) {
+                      e.preventDefault();
+                      openActivityDialog(day.date, day.count);
+                    }
+                  }}
                 >
+                  <div className="absolute inset-x-0 bottom-0 h-full rounded-sm bg-white/[0.03] border border-white/[0.05]" />
                   <div
-                    className="w-full bg-gradient-to-t from-gold/50 to-gold/20 rounded-t transition-all hover:from-gold/70 hover:to-gold/40"
-                    style={{ height: `${Math.max(height, 4)}%` }}
+                    className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-blue-500/80 to-blue-400/35 border border-blue-400/40 rounded-sm transition-all hover:from-blue-500 hover:to-blue-300/50"
+                    style={{ height: `${day.count > 0 ? Math.max(height, 4) : 0}%` }}
                   />
                 </div>
               );
             })}
           </div>
-          <div className="flex justify-between text-[10px] text-white/15 mt-2">
-            <span>{mergedTimeline[0]?.date}</span>
-            <span>{mergedTimeline[mergedTimeline.length - 1]?.date}</span>
+          <div className="flex mt-2 gap-1">
+            {monthlyTimeline.map((day: any) => (
+              <span key={`label-${day.date}`} className="flex-1 text-[9px] text-white/60 font-semibold text-center">
+                {day.dayNumber === 1 || day.dayNumber === daysInActivityMonth || day.dayNumber % 5 === 0 ? day.dayNumber : ""}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {selectedActivityDate && (
+        <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl glass-card rounded-2xl border border-white/[0.08] p-6 max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h3 className="text-xl font-bold font-display">Activity on {selectedActivityDate}</h3>
+                <p className="text-sm text-white/40">{selectedDayActivities.length} interaction(s)</p>
+              </div>
+              <button
+                onClick={() => setSelectedActivityDate(null)}
+                className="px-3 py-1.5 rounded-lg bg-white/10 text-white/70 hover:bg-white/20 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+
+            {selectedDayActivities.length > 0 ? (
+              <div className="space-y-2 overflow-y-auto pr-1">
+                {selectedDayActivities.map((item: any, index: number) => (
+                  <div
+                    key={`${item.movie_tmdb_id}-${item.interaction_type}-${item.created_at}-${index}`}
+                    className="flex items-center justify-between p-3 rounded-lg bg-white/[0.02] border border-white/[0.06]"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-md ${
+                        item.interaction_type === "like" ? "bg-emerald-500/15 text-emerald-400" :
+                        item.interaction_type === "dislike" ? "bg-red-500/15 text-red-400" :
+                        item.interaction_type === "watched" ? "bg-blue-500/15 text-blue-400" :
+                        item.interaction_type === "watchlist" ? "bg-gold/15 text-gold" :
+                        item.interaction_type === "view" ? "bg-blue-500/15 text-blue-300" :
+                        "bg-white/5 text-white/50"
+                      }`}>
+                        {item.interaction_type}
+                      </span>
+                      <span className="text-sm text-white/80 truncate">{item.movie_title || `Movie #${item.movie_tmdb_id}`}</span>
+                    </div>
+                    <span className="text-[11px] text-white/35 flex-shrink-0">
+                      {new Date(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-white/40">No detailed interactions available for this day.</p>
+            )}
           </div>
         </div>
       )}
