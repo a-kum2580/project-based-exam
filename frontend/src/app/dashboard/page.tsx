@@ -88,7 +88,6 @@ export default function DashboardPage() {
   const watchlistMovies = stats?.watchlist_movies || [];
   const maxGenreCount = Math.max(...genreDist.map((g: any) => g.count), 1);
   const maxPrefWeight = Math.max(...prefScores.map((p: any) => p.weight), 1);
-  const totalInteractions = summary.total_interactions || 0;
 
   const interactionWeightKey = [
     { type: "Like", weight: "+5.0", color: "text-emerald-400" },
@@ -177,7 +176,6 @@ export default function DashboardPage() {
               <Icon className={`w-5 h-5 ${color} mb-3`} />
               <p className="text-3xl font-bold font-display">{value}</p>
               <p className="text-[11px] text-white/30 uppercase tracking-wider mt-1">{label}</p>
-              <p className="text-[10px] text-white/35 mt-0.5">out of {totalInteractions} tracked events</p>
               <p className="text-[10px] text-gold/70 mt-1">View list</p>
             </div>
           </div>
