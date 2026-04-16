@@ -144,9 +144,9 @@ def _serialize_movie_map(movie_map: dict[str, list[dict[str, Any]]]) -> dict[str
 
 
 def _build_dashboard_summary(interactions, watchlist) -> dict[str, Any]:
-    likes_count = interactions.filter(interaction_type="like").count()
-    dislikes_count = interactions.filter(interaction_type="dislike").count()
-    explicit_watched_count = interactions.filter(interaction_type="watched").count()
+    likes_count = interactions.filter(interaction_type="like").values("movie_tmdb_id").distinct().count()
+    dislikes_count = interactions.filter(interaction_type="dislike").values("movie_tmdb_id").distinct().count()
+    explicit_watched_count = interactions.filter(interaction_type="watched").values("movie_tmdb_id").distinct().count()
 
     summary = {
         "total_interactions": interactions.count(),
@@ -286,8 +286,18 @@ def track_interaction(request):
     """
     serializer = UserMovieInteractionSerializer(data=request.data)
     if serializer.is_valid():
-        serializer.save(user=request.user)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        payload = serializer.validated_data
+        interaction, _ = UserMovieInteraction.objects.update_or_create(
+            user=request.user,
+            movie_tmdb_id=payload["movie_tmdb_id"],
+            interaction_type=payload["interaction_type"],
+            defaults={
+                "movie_title": payload.get("movie_title", ""),
+                "genre_ids": payload.get("genre_ids", []),
+                "rating": payload.get("rating"),
+            },
+        )
+        return Response(UserMovieInteractionSerializer(interaction).data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
