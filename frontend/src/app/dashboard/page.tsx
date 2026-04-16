@@ -88,6 +88,16 @@ export default function DashboardPage() {
   const watchlistMovies = stats?.watchlist_movies || [];
   const maxGenreCount = Math.max(...genreDist.map((g: any) => g.count), 1);
   const maxPrefWeight = Math.max(...prefScores.map((p: any) => p.weight), 1);
+  const totalInteractions = summary.total_interactions || 0;
+
+  const interactionWeightKey = [
+    { type: "Like", weight: "+5.0", color: "text-emerald-400" },
+    { type: "Watched", weight: "+3.0", color: "text-blue-400" },
+    { type: "Watchlist", weight: "+2.5", color: "text-gold" },
+    { type: "View", weight: "+1.0", color: "text-cyan-400" },
+    { type: "Search", weight: "+0.5", color: "text-fuchsia-400" },
+    { type: "Dislike", weight: "-3.0", color: "text-red-400" },
+  ];
 
   const statCards = [
     { key: "liked", label: "Liked", value: summary.likes || 0, icon: Heart, color: "text-emerald-400", bg: "from-emerald-500/10 to-emerald-600/5" },
@@ -167,6 +177,7 @@ export default function DashboardPage() {
               <Icon className={`w-5 h-5 ${color} mb-3`} />
               <p className="text-3xl font-bold font-display">{value}</p>
               <p className="text-[11px] text-white/30 uppercase tracking-wider mt-1">{label}</p>
+              <p className="text-[10px] text-white/35 mt-0.5">out of {totalInteractions} tracked events</p>
               <p className="text-[10px] text-gold/70 mt-1">View list</p>
             </div>
           </div>
@@ -232,10 +243,13 @@ export default function DashboardPage() {
             <h2 className="text-lg font-bold font-display">Genre Distribution</h2>
             {totalGenreCount > 0 && (
               <span className="text-xs text-white/30 ml-auto">
-                {totalGenreCount} total genres
+                out of {totalGenreCount} total genre occurrences
               </span>
             )}
           </div>
+          <p className="text-xs text-white/35 mb-4">
+            Each genre count is based on all genre tags seen in your tracked interactions.
+          </p>
           {genreDist.length > 0 ? (
             <div className="space-y-3">
               {genreDist.slice(0, 8).map((genre: any) => (
@@ -265,7 +279,11 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2 mb-5">
             <TrendingUp className="w-4 h-4 text-gold" />
             <h2 className="text-lg font-bold font-display">Preference Scores</h2>
+            <span className="text-xs text-white/30 ml-auto">out of 100</span>
           </div>
+          <p className="text-xs text-white/35 mb-4">
+            Weighted by interaction type, then normalized so your strongest genre is 100.
+          </p>
           {prefScores.length > 0 ? (
             <div className="space-y-3">
               {prefScores.slice(0, 8).map((pref: any) => (
@@ -288,6 +306,20 @@ export default function DashboardPage() {
               Interact with movies to build your preference profile
             </p>
           )}
+          <div className="mt-5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-white/55">How Scoring Works</h3>
+              <span className="text-[11px] text-white/35">weight per interaction</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+              {interactionWeightKey.map((item) => (
+                <div key={item.type} className="rounded-lg border border-white/[0.06] bg-surface-2 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wide text-white/40">{item.type}</p>
+                  <p className={`text-sm font-semibold ${item.color}`}>{item.weight}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
