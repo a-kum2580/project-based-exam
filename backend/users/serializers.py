@@ -65,17 +65,8 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
-        # Case-insensitive login: accept trimmed username or email as identifier.
-        identifier = (attrs.get("username") or "").strip()
-        attrs["username"] = identifier
-
-        if not identifier:
-            return super().validate(attrs)
-
-        if "@" in identifier:
-            match = User.objects.filter(email__iexact=identifier).only("username").first()
-        else:
-            match = User.objects.filter(username__iexact=identifier).only("username").first()
-
-        attrs["username"] = match.username if match else identifier
+        # Case-insensitive login: map input username to stored username.
+        if "username" in attrs and attrs["username"]:
+            match = User.objects.filter(username__iexact=attrs["username"]).only("username").first()
+            attrs["username"] = match.username if match else attrs["username"]
         return super().validate(attrs)
