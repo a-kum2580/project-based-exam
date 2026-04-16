@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -66,6 +66,7 @@ export default function MovieDetailPage() {
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [watchlistItemId, setWatchlistItemId] = useState<number | null>(null);
   const [likeCount, setLikeCount] = useState(0);
+  const hasTrackedViewRef = useRef(false);
 
   // Initializing like/bookmark state
   useEffect(() => {
@@ -93,6 +94,25 @@ export default function MovieDetailPage() {
 
     syncWatchlistStatusFromBackend();
   }, [tmdbId, isAuthenticated]);
+
+  useEffect(() => {
+    if (!tmdbId || !movie || !isAuthenticated || hasTrackedViewRef.current) return;
+
+    hasTrackedViewRef.current = true;
+
+    const genreIds = (movie.genres || [])
+      .map((g: any) => g.tmdb_id ?? g.id)
+      .filter(Boolean);
+
+    recommendationsAPI.trackInteraction({
+      movie_tmdb_id: tmdbId,
+      movie_title: movie.title || "",
+      interaction_type: "view",
+      genre_ids: genreIds,
+    }).catch((err) => {
+      console.error("Failed to persist view interaction:", err);
+    });
+  }, [tmdbId, movie, isAuthenticated]);
 
   // Fetching movie data plus recommendations
   useEffect(() => {

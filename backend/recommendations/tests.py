@@ -79,6 +79,28 @@ class TrackInteractionAPITest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(UserMovieInteraction.objects.count(), 1)
 
+    def test_track_view(self):
+        data = {
+            "movie_tmdb_id": 550,
+            "movie_title": "Fight Club",
+            "interaction_type": "view",
+            "genre_ids": [28, 18],
+        }
+        response = self.client.post("/api/recommendations/track/", data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(UserMovieInteraction.objects.filter(interaction_type="view").count(), 1)
+
+    def test_track_search(self):
+        data = {
+            "movie_tmdb_id": 18,
+            "movie_title": "Genre: Drama",
+            "interaction_type": "search",
+            "genre_ids": [18],
+        }
+        response = self.client.post("/api/recommendations/track/", data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(UserMovieInteraction.objects.filter(interaction_type="search").count(), 1)
+
     def test_track_unauthenticated(self):
         self.client.force_authenticate(user=None)
         data = {"movie_tmdb_id": 550, "movie_title": "Fight Club", "interaction_type": "like"}
@@ -237,6 +259,20 @@ class DashboardAPITest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data["liked_movies"]), 1)
 
+    def test_dashboard_watched_movies_are_unique_by_movie(self):
+        UserMovieInteraction.objects.create(
+            user=self.user, movie_tmdb_id=901, movie_title="Movie Y",
+            interaction_type="like", genre_ids=[18]
+        )
+        UserMovieInteraction.objects.create(
+            user=self.user, movie_tmdb_id=901, movie_title="Movie Y",
+            interaction_type="watched", genre_ids=[18]
+        )
+
+        response = self.client.get("/api/recommendations/dashboard/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["watched_movies"]), 1)
+
     def test_dashboard_genre_ids_are_resolved_to_names(self):
         UserMovieInteraction.objects.create(
             user=self.user,
@@ -249,13 +285,32 @@ class DashboardAPITest(APITestCase):
         response = self.client.get("/api/recommendations/dashboard/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        genre_names = {item["name"] for item in response.data["genre_distribution"]}
+        genre_names = {item["name"] for item in response.data["genre_distribution"]["genres"]}
         pref_names = {item["name"] for item in response.data["preference_scores"]}
 
         self.assertIn("Drama", genre_names)
         self.assertIn("Crime", genre_names)
         self.assertIn("Drama", pref_names)
         self.assertIn("Crime", pref_names)
+
+    def test_dashboard_returns_activity_details(self):
+        UserMovieInteraction.objects.create(
+            user=self.user,
+            movie_tmdb_id=777,
+            movie_title="Activity Movie",
+            interaction_type="like",
+            genre_ids=[18],
+        )
+
+        response = self.client.get("/api/recommendations/dashboard/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("activity_details", response.data)
+        self.assertGreaterEqual(len(response.data["activity_details"]), 1)
+
+        first = response.data["activity_details"][0]
+        self.assertIn("date", first)
+        self.assertIn("interaction_type", first)
+        self.assertIn("movie_title", first)
 
 
 class BecauseYouWatchedAPITest(APITestCase):
@@ -293,7 +348,7 @@ class BecauseYouWatchedAPITest(APITestCase):
         mock_engine.get_because_you_watched.assert_called_once_with(self.user)
 
 class RecommendationEnginePreferencesTest(TestCase):
-    """Verify the engine computes normalised genre weights from interactions."""
+    """Verify the engine computes raw genre weights from interactions."""
 
     def setUp(self):
         self.user = User.objects.create_user(username="recuser", password="pass12345")
@@ -315,22 +370,22 @@ class RecommendationEnginePreferencesTest(TestCase):
             interaction_type="view", genre_ids=[18],
         )
 
-    def test_genre_weights_normalised_correctly(self):
+    def test_genre_weights_are_raw_totals(self):
         engine = RecommendationEngine()
         prefs = engine.compute_genre_preferences(self.user)
 
-        # prefs is a list of (genre_id, normalised_score) sorted desc
+        # prefs is a list of (genre_id, raw_score) sorted desc
         pref_dict = dict(prefs)
 
-        # Action had raw score 10 → should normalise to 100 (max)
-        self.assertEqual(pref_dict[28], 100.0)
+        # Action had raw score 10
+        self.assertEqual(pref_dict[28], 10.0)
 
-        # Drama had raw score 1 → (1/10)*100 = 10.0
-        self.assertEqual(pref_dict[18], 10.0)
+        # Drama had raw score 1
+        self.assertEqual(pref_dict[18], 1.0)
 
         # Verify DB records were saved
         db_pref = UserGenrePreference.objects.get(user=self.user, genre_tmdb_id=28)
-        self.assertEqual(db_pref.weight, 100.0)
+        self.assertEqual(db_pref.weight, 10.0)
         self.assertEqual(db_pref.genre_name, "Action")
 
 class RecommendationEngineNewUserTest(TestCase):
@@ -449,9 +504,9 @@ class RecommendationEnginePolicyInjectionTest(TestCase):
             genre_ids=[18],
         )
 
-    def test_custom_weight_policy_changes_normalized_scores(self):
+    def test_custom_weight_policy_changes_raw_scores(self):
         engine = RecommendationEngine(weight_policy=self._CustomPolicy())
         prefs = dict(engine.compute_genre_preferences(self.user))
 
-        self.assertEqual(prefs[28], 100.0)
-        self.assertEqual(prefs[18], 10.0)
+        self.assertEqual(prefs[28], 10.0)
+        self.assertEqual(prefs[18], 1.0)

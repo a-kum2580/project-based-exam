@@ -71,10 +71,14 @@ def _parse_page(request, default=1, max_page=MAX_PAGE) -> int:
     return ParamParser.safe_page(request.query_params.get("page", default), default=default, max_page=max_page)
 
 
-def _build_genre_distribution(interactions_qs, limit=10) -> list[dict[str, Any]]:
+def _build_genre_distribution(interactions_qs, limit=10) -> dict[str, Any]:
     """
-    Build a top-N genre distribution based on stored interaction.genre_ids.
-    Returns: [{name, tmdb_id, count}, ...]
+    Build a top-N genre distribution based on all genres across tracked movies.
+    Each genre's count is shown relative to the total genre occurrences.
+    Returns: {
+        "genres": [{name, tmdb_id, count, percentage}, ...],
+        "total_genres": total_count
+    }
     """
     from movies.models import Genre
 
@@ -83,11 +87,23 @@ def _build_genre_distribution(interactions_qs, limit=10) -> list[dict[str, Any]]
         for gid in interaction.genre_ids:
             genre_counter[gid] += 1
 
+    total_genres = sum(genre_counter.values())
+    
+    if total_genres == 0:
+        return {"genres": [], "total_genres": 0}
+
     genre_name_map = {g.tmdb_id: g.name for g in Genre.objects.all()}
-    return [
-        {"name": _resolve_genre_name(gid, genre_name_map), "tmdb_id": gid, "count": count}
+    genres = [
+        {
+            "name": _resolve_genre_name(gid, genre_name_map),
+            "tmdb_id": gid,
+            "count": count,
+            "percentage": round((count / total_genres) * 100, 1),
+        }
         for gid, count in genre_counter.most_common(limit)
     ]
+    
+    return {"genres": genres, "total_genres": total_genres}
 
 
 def _build_activity_timeline(interactions_qs, days=30) -> list[dict[str, Any]]:
@@ -101,6 +117,23 @@ def _build_activity_timeline(interactions_qs, days=30) -> list[dict[str, Any]]:
         .order_by("date")
     )
     return [{"date": str(d["date"]), "count": d["count"]} for d in daily]
+
+
+def _build_activity_details(interactions_qs, days=31) -> list[dict[str, Any]]:
+    """Return detailed interaction rows for the last N days grouped by date on the client."""
+    start = timezone.now() - timedelta(days=days)
+    rows = interactions_qs.filter(created_at__gte=start).order_by("-created_at")
+
+    details = []
+    for row in rows:
+        details.append({
+            "date": str(row.created_at.date()),
+            "movie_tmdb_id": row.movie_tmdb_id,
+            "movie_title": row.movie_title,
+            "interaction_type": row.interaction_type,
+            "created_at": row.created_at,
+        })
+    return details
 
 
 def _build_preference_scores(user, engine, limit=10) -> list[dict[str, Any]]:
@@ -128,9 +161,9 @@ def _serialize_movie_map(movie_map: dict[str, list[dict[str, Any]]]) -> dict[str
 
 
 def _build_dashboard_summary(interactions, watchlist) -> dict[str, Any]:
-    likes_count = interactions.filter(interaction_type="like").count()
-    dislikes_count = interactions.filter(interaction_type="dislike").count()
-    explicit_watched_count = interactions.filter(interaction_type="watched").count()
+    likes_count = interactions.filter(interaction_type="like").values("movie_tmdb_id").distinct().count()
+    dislikes_count = interactions.filter(interaction_type="dislike").values("movie_tmdb_id").distinct().count()
+    explicit_watched_count = interactions.filter(interaction_type="watched").values("movie_tmdb_id").distinct().count()
 
     summary = {
         "total_interactions": interactions.count(),
@@ -199,20 +232,30 @@ def _build_disliked_movies(interactions_qs, limit=30) -> list[dict[str, Any]]:
 
 
 def _build_watched_movies(interactions_qs, limit=30) -> list[dict[str, Any]]:
-    """Return recent watched events (like/dislike/watched) for dashboard display."""
+    """Return latest unique watched movies (from like/dislike/watched interactions)."""
     watched_rows = interactions_qs.filter(
         interaction_type__in=["like", "dislike", "watched"]
-    ).order_by("-created_at")[:limit]
+    ).order_by("-created_at")
 
-    return [
-        {
+    seen_tmdb_ids = set()
+    watched_movies = []
+
+    for row in watched_rows:
+        if row.movie_tmdb_id in seen_tmdb_ids:
+            continue
+
+        seen_tmdb_ids.add(row.movie_tmdb_id)
+        watched_movies.append({
             "movie_tmdb_id": row.movie_tmdb_id,
             "movie_title": row.movie_title,
             "watched_at": row.created_at,
             "source_interaction": row.interaction_type,
-        }
-        for row in watched_rows
-    ]
+        })
+
+        if len(watched_movies) >= limit:
+            break
+
+    return watched_movies
 
 
 def _build_watchlist_movies(watchlist_qs, limit=30) -> list[dict[str, Any]]:
@@ -270,8 +313,18 @@ def track_interaction(request):
     """
     serializer = UserMovieInteractionSerializer(data=request.data)
     if serializer.is_valid():
-        serializer.save(user=request.user)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        payload = serializer.validated_data
+        interaction, _ = UserMovieInteraction.objects.update_or_create(
+            user=request.user,
+            movie_tmdb_id=payload["movie_tmdb_id"],
+            interaction_type=payload["interaction_type"],
+            defaults={
+                "movie_title": payload.get("movie_title", ""),
+                "genre_ids": payload.get("genre_ids", []),
+                "rating": payload.get("rating"),
+            },
+        )
+        return Response(UserMovieInteractionSerializer(interaction).data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -354,6 +407,7 @@ def dashboard_stats(request):
         "genre_distribution": _build_genre_distribution(interactions),
         "preference_scores": _build_preference_scores(user, engine),
         "activity_timeline": _build_activity_timeline(interactions),
+        "activity_details": _build_activity_details(interactions),
         "recent_activity": _build_recent_activity(interactions),
         "liked_movies": _build_liked_movies(interactions),
         "disliked_movies": _build_disliked_movies(interactions),

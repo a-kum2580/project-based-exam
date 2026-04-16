@@ -129,6 +129,33 @@ class CompareMoviesAPITest(APITestCase):
         response = self.client.get("/api/movies/compare/")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+
+class SearchMoviesAPITest(APITestCase):
+    """Tests for search result ordering."""
+
+    @patch("movies.views.get_tmdb_service")
+    @patch("movies.views.get_movie_catalog_service")
+    def test_search_orders_results_by_similarity(self, mock_get_movie_catalog_service, mock_get_tmdb_service):
+        mock_tmdb = MagicMock()
+        mock_get_tmdb_service.return_value = mock_tmdb
+
+        mock_catalog = MagicMock()
+        mock_get_movie_catalog_service.return_value = mock_catalog
+        mock_catalog.search_movies.return_value = {
+            "results": [
+                {"id": 1, "title": "The Dark Knight", "overview": "", "release_date": "2008-07-18", "vote_average": 9.0, "vote_count": 100, "popularity": 80.0, "poster_path": None, "backdrop_path": None},
+                {"id": 2, "title": "Batman Begins", "overview": "", "release_date": "2005-06-15", "vote_average": 8.0, "vote_count": 90, "popularity": 75.0, "poster_path": None, "backdrop_path": None},
+                {"id": 3, "title": "Superman Returns", "overview": "", "release_date": "2006-06-28", "vote_average": 7.0, "vote_count": 70, "popularity": 65.0, "poster_path": None, "backdrop_path": None},
+            ],
+            "total_pages": 1,
+            "total_results": 3,
+        }
+
+        response = self.client.get("/api/movies/search/?q=batman")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([movie["title"] for movie in response.data["results"]], ["Batman Begins", "The Dark Knight", "Superman Returns"])
+
 FAKE_MOVIE_PAYLOAD = {
     "id": 550, "imdb_id": "tt0137523",
     "title": "Fight Club", "original_title": "Fight Club",

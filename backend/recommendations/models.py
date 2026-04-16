@@ -45,7 +45,7 @@ class UserGenrePreference(models.Model):
     )
     genre_tmdb_id = models.IntegerField()
     genre_name = models.CharField(max_length=100)
-    weight = models.FloatField(default=0, help_text="Computed preference score 0-100")
+    weight = models.FloatField(default=0, help_text="Computed preference score based on weighted interactions")
     interaction_count = models.IntegerField(default=0)
     updated_at = models.DateTimeField(auto_now=True)
 

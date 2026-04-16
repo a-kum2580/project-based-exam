@@ -88,6 +88,64 @@ def _fetch_movies_for_comparison(catalog_service: MovieCatalogService, ids: list
     return movies
 
 
+def _normalize_search_text(value: str | None) -> str:
+    if not value:
+      return ""
+    normalized = "".join(character.lower() if character.isalnum() else " " for character in value)
+    return " ".join(normalized.split())
+
+
+def _search_result_similarity(query: str, result: dict) -> float:
+    normalized_query = _normalize_search_text(query)
+    if not normalized_query:
+        return 0.0
+
+    query_tokens = normalized_query.split()
+    candidates = [
+        _normalize_search_text(result.get("title")),
+        _normalize_search_text(result.get("original_title")),
+    ]
+
+    best_score = 0.0
+    for candidate in candidates:
+        if not candidate:
+            continue
+
+        if candidate == normalized_query:
+            return 1.0
+
+        if candidate.startswith(normalized_query) or normalized_query.startswith(candidate):
+            best_score = max(best_score, 0.95)
+
+        candidate_tokens = candidate.split()
+        token_scores = []
+        for query_token in query_tokens:
+            token_best = 0.0
+            for candidate_token in candidate_tokens:
+                if query_token == candidate_token:
+                    token_best = 1.0
+                    break
+                if candidate_token.startswith(query_token) or query_token.startswith(candidate_token):
+                    token_best = max(token_best, 0.9)
+                elif query_token in candidate_token or candidate_token in query_token:
+                    token_best = max(token_best, 0.75)
+            token_scores.append(token_best)
+
+        if token_scores:
+                best_score = max(best_score, sum(token_scores) / len(token_scores))
+
+    return best_score
+
+
+def _sort_search_results_by_similarity(query: str, results: list[dict]) -> list[dict]:
+    ranked_results = [
+        (index, result, _search_result_similarity(query, result))
+        for index, result in enumerate(results)
+    ]
+    ranked_results.sort(key=lambda item: (-item[2], item[0]))
+    return [result for _, result, _ in ranked_results]
+
+
 
 
 ## Movie ViewSet
@@ -206,7 +264,7 @@ def search_movies(request) -> Response:
     catalog_service = get_movie_catalog_service(tmdb_service=tmdb_service)
     data = catalog_service.search_movies(query, page=page)
     TMDBErrorValidator.ensure_ok(data, request=request, context="search_movies")
-    results = data.get("results", [])
+    results = _sort_search_results_by_similarity(query, data.get("results", []))
     serializer = TMDBMovieSerializer(results, many=True)
 
     return Response({
@@ -301,7 +359,8 @@ def search_people(request) -> Response:
     catalog_service = get_movie_catalog_service()
     data = catalog_service.search_people(query)
     TMDBErrorValidator.ensure_ok(data, request=request, context="search_people")
-    return Response(data)
+    results = _sort_search_results_by_similarity(query, data.get("results", []))
+    return Response({**data, "results": results})
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
