@@ -259,6 +259,20 @@ class DashboardAPITest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data["liked_movies"]), 1)
 
+    def test_dashboard_watched_movies_are_unique_by_movie(self):
+        UserMovieInteraction.objects.create(
+            user=self.user, movie_tmdb_id=901, movie_title="Movie Y",
+            interaction_type="like", genre_ids=[18]
+        )
+        UserMovieInteraction.objects.create(
+            user=self.user, movie_tmdb_id=901, movie_title="Movie Y",
+            interaction_type="watched", genre_ids=[18]
+        )
+
+        response = self.client.get("/api/recommendations/dashboard/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["watched_movies"]), 1)
+
     def test_dashboard_genre_ids_are_resolved_to_names(self):
         UserMovieInteraction.objects.create(
             user=self.user,
@@ -334,7 +348,7 @@ class BecauseYouWatchedAPITest(APITestCase):
         mock_engine.get_because_you_watched.assert_called_once_with(self.user)
 
 class RecommendationEnginePreferencesTest(TestCase):
-    """Verify the engine computes normalised genre weights from interactions."""
+    """Verify the engine computes raw genre weights from interactions."""
 
     def setUp(self):
         self.user = User.objects.create_user(username="recuser", password="pass12345")
@@ -356,22 +370,22 @@ class RecommendationEnginePreferencesTest(TestCase):
             interaction_type="view", genre_ids=[18],
         )
 
-    def test_genre_weights_normalised_correctly(self):
+    def test_genre_weights_are_raw_totals(self):
         engine = RecommendationEngine()
         prefs = engine.compute_genre_preferences(self.user)
 
-        # prefs is a list of (genre_id, normalised_score) sorted desc
+        # prefs is a list of (genre_id, raw_score) sorted desc
         pref_dict = dict(prefs)
 
-        # Action had raw score 10 → should normalise to 100 (max)
-        self.assertEqual(pref_dict[28], 100.0)
+        # Action had raw score 10
+        self.assertEqual(pref_dict[28], 10.0)
 
-        # Drama had raw score 1 → (1/10)*100 = 10.0
-        self.assertEqual(pref_dict[18], 10.0)
+        # Drama had raw score 1
+        self.assertEqual(pref_dict[18], 1.0)
 
         # Verify DB records were saved
         db_pref = UserGenrePreference.objects.get(user=self.user, genre_tmdb_id=28)
-        self.assertEqual(db_pref.weight, 100.0)
+        self.assertEqual(db_pref.weight, 10.0)
         self.assertEqual(db_pref.genre_name, "Action")
 
 class RecommendationEngineNewUserTest(TestCase):
@@ -490,9 +504,9 @@ class RecommendationEnginePolicyInjectionTest(TestCase):
             genre_ids=[18],
         )
 
-    def test_custom_weight_policy_changes_normalized_scores(self):
+    def test_custom_weight_policy_changes_raw_scores(self):
         engine = RecommendationEngine(weight_policy=self._CustomPolicy())
         prefs = dict(engine.compute_genre_preferences(self.user))
 
-        self.assertEqual(prefs[28], 100.0)
-        self.assertEqual(prefs[18], 10.0)
+        self.assertEqual(prefs[28], 10.0)
+        self.assertEqual(prefs[18], 1.0)

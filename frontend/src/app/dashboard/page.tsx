@@ -21,6 +21,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeList, setActiveList] = useState<"liked" | "disliked" | "watched" | "watchlist" | null>(null);
+  const [preferenceDisplayMode, setPreferenceDisplayMode] = useState<"raw" | "percentage">("raw");
   const [selectedActivityDate, setSelectedActivityDate] = useState<string | null>(null);
   const listPanelRef = useRef<HTMLDivElement | null>(null);
 
@@ -31,6 +32,16 @@ export default function DashboardPage() {
     }
     fetchDashboard();
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!activeList) return;
+
+    const scrollTimer = window.setTimeout(() => {
+      listPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+
+    return () => window.clearTimeout(scrollTimer);
+  }, [activeList]);
 
   async function fetchDashboard() {
     try {
@@ -97,6 +108,7 @@ export default function DashboardPage() {
   const watchlistMovies = stats?.watchlist_movies || [];
   const maxGenreCount = Math.max(...genreDist.map((g: any) => g.count), 1);
   const maxPrefWeight = Math.max(...prefScores.map((p: any) => p.weight), 1);
+  const preferenceDisplayLabel = preferenceDisplayMode === "raw" ? "raw weighted score" : "percentage of top score";
 
   const mergedTimelineMap = new Map<string, number>();
   timeline.forEach((day: any) => {
@@ -166,14 +178,19 @@ export default function DashboardPage() {
   function handleStatCardClick(cardKey?: "liked" | "disliked" | "watched" | "watchlist") {
     if (!cardKey) return;
     setActiveList(cardKey);
-    requestAnimationFrame(() => {
-      listPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
   }
 
   function openActivityDialog(date: string, count: number) {
     if (count <= 0) return;
     setSelectedActivityDate(date);
+  }
+
+  function getPreferenceDisplayValue(weight: number) {
+    if (preferenceDisplayMode === "percentage") {
+      return `${((weight / maxPrefWeight) * 100).toFixed(1)}%`;
+    }
+
+    return weight.toFixed(1);
   }
 
   const selectedDayActivities = selectedActivityDate
@@ -230,7 +247,7 @@ export default function DashboardPage() {
       </div>
 
       {activeList && (
-        <div ref={listPanelRef} className="glass-card rounded-xl p-6 mb-10">
+        <div ref={listPanelRef} className="glass-card rounded-xl p-6 mb-10 scroll-mt-24">
           <div className="flex items-center justify-between gap-4 mb-5">
             <div className="flex items-center gap-2">
               {activeList === "liked" && <Heart className="w-4 h-4 text-emerald-400" />}
@@ -249,7 +266,7 @@ export default function DashboardPage() {
             )}
           </div>
           {getActiveListItems().length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[24rem] overflow-y-auto pr-1 scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-white/20 hover:scrollbar-thumb-white/30">
               {getActiveListItems().map((item: any, idx: number) => (
                 <Link
                   key={`${item.movie_tmdb_id}-${idx}`}
@@ -302,12 +319,17 @@ export default function DashboardPage() {
                   <span className="text-[12px] text-white/50 w-24 text-right flex-shrink-0 truncate">
                     {genre.name}
                   </span>
-                  <div className="flex-1 h-6 bg-surface-3 rounded-lg overflow-hidden">
-                    <div
-                      className="h-full rounded-lg bg-gradient-to-r from-gold/60 to-gold/30 transition-all duration-700"
-                      style={{ width: `${(genre.count / maxGenreCount) * 100}%` }}
+                  <svg className="flex-1 h-6 bg-surface-3 rounded-lg overflow-hidden" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true">
+                    <rect x="0" y="0" width="100" height="24" rx="4" fill="rgba(255,255,255,0.03)" />
+                    <rect
+                      x="0"
+                      y="0"
+                      width={Math.max((genre.count / maxGenreCount) * 100, 0)}
+                      height="24"
+                      rx="4"
+                      fill="url(#genreBarGradient)"
                     />
-                  </div>
+                  </svg>
                   <span className="text-[12px] text-white/30 w-12 font-mono text-right">{genre.count} ({genre.percentage}%)</span>
                 </div>
               ))}
@@ -324,10 +346,25 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2 mb-5">
             <TrendingUp className="w-4 h-4 text-gold" />
             <h2 className="text-lg font-bold font-display">Preference Scores</h2>
-            <span className="text-xs text-white/30 ml-auto">out of 100</span>
+            <div className="ml-auto flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] p-1">
+              {(["raw", "percentage"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setPreferenceDisplayMode(mode)}
+                  className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wider transition-colors ${
+                    preferenceDisplayMode === mode
+                      ? "bg-gold text-surface-0"
+                      : "text-white/40 hover:text-white/70"
+                  }`}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
           </div>
           <p className="text-xs text-white/35 mb-4">
-            Weighted by interaction type, then normalized so your strongest genre is 100.
+            Showing {preferenceDisplayLabel}. Higher values mean stronger preference.
           </p>
           {prefScores.length > 0 ? (
             <div className="space-y-3">
@@ -336,13 +373,18 @@ export default function DashboardPage() {
                   <span className="text-[12px] text-white/50 w-24 text-right flex-shrink-0 truncate">
                     {pref.name}
                   </span>
-                  <div className="flex-1 h-6 bg-surface-3 rounded-lg overflow-hidden">
-                    <div
-                      className="h-full rounded-lg bg-gradient-to-r from-emerald-500/60 to-emerald-500/30 transition-all duration-700"
-                      style={{ width: `${(pref.weight / maxPrefWeight) * 100}%` }}
+                  <svg className="flex-1 h-6 bg-surface-3 rounded-lg overflow-hidden" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true">
+                    <rect x="0" y="0" width="100" height="24" rx="4" fill="rgba(255,255,255,0.03)" />
+                    <rect
+                      x="0"
+                      y="0"
+                      width={Math.max((pref.weight / maxPrefWeight) * 100, 0)}
+                      height="24"
+                      rx="4"
+                      fill="url(#prefBarGradient)"
                     />
-                  </div>
-                  <span className="text-[12px] text-white/30 w-10 font-mono">{pref.weight}</span>
+                  </svg>
+                  <span className="text-[12px] text-white/30 w-16 font-mono text-right">{getPreferenceDisplayValue(pref.weight)}</span>
                 </div>
               ))}
             </div>
@@ -387,7 +429,6 @@ export default function DashboardPage() {
                   title={`${day.date}: ${day.count} interactions`}
                   onClick={() => openActivityDialog(day.date, day.count)}
                   role="button"
-                  aria-disabled={day.count <= 0}
                   tabIndex={day.count > 0 ? 0 : -1}
                   onKeyDown={(e) => {
                     if (day.count > 0 && (e.key === "Enter" || e.key === " ")) {
@@ -396,11 +437,19 @@ export default function DashboardPage() {
                     }
                   }}
                 >
-                  <div className="absolute inset-x-0 bottom-0 h-full rounded-sm bg-white/[0.03] border border-white/[0.05]" />
-                  <div
-                    className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-blue-500/80 to-blue-400/35 border border-blue-400/40 rounded-sm transition-all hover:from-blue-500 hover:to-blue-300/50"
-                    style={{ height: `${day.count > 0 ? Math.max(height, 4) : 0}%` }}
-                  />
+                  <svg className="absolute inset-x-0 bottom-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                    <rect x="0" y="0" width="100" height="100" rx="2" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.05)" />
+                    {day.count > 0 && (
+                      <rect
+                        x="0"
+                        y={100 - Math.max(height, 4)}
+                        width="100"
+                        height={Math.max(height, 4)}
+                        rx="2"
+                        fill="url(#activityBarGradient)"
+                      />
+                    )}
+                  </svg>
                 </div>
               );
             })}
@@ -414,6 +463,23 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      <svg className="absolute w-0 h-0" aria-hidden="true" focusable="false">
+        <defs>
+          <linearGradient id="genreBarGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="rgba(251,191,36,0.6)" />
+            <stop offset="100%" stopColor="rgba(251,191,36,0.3)" />
+          </linearGradient>
+          <linearGradient id="prefBarGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="rgba(16,185,129,0.6)" />
+            <stop offset="100%" stopColor="rgba(16,185,129,0.3)" />
+          </linearGradient>
+          <linearGradient id="activityBarGradient" x1="0%" y1="100%" x2="0%" y2="0%">
+            <stop offset="0%" stopColor="rgba(96,165,250,0.8)" />
+            <stop offset="100%" stopColor="rgba(96,165,250,0.35)" />
+          </linearGradient>
+        </defs>
+      </svg>
 
       {selectedActivityDate && (
         <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">

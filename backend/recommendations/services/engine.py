@@ -54,7 +54,6 @@ class RecommendationEngine:
             genre_interaction_counts=genre_interaction_counts,
             genre_names=genre_names,
         )
-        self._normalize_genre_scores(genre_scores)
         self._persist_genre_preferences(
             user=user,
             genre_scores=genre_scores,
@@ -140,16 +139,6 @@ class RecommendationEngine:
                 genre_interaction_counts[genre_id] += 1
                 if genre_id not in genre_names:
                     genre_names[genre_id] = f"Genre {genre_id}"
-
-    @staticmethod
-    def _normalize_genre_scores(genre_scores: Counter) -> None:
-        if not genre_scores:
-            return
-        max_score = max(genre_scores.values())
-        if max_score <= 0:
-            return
-        for genre_id in genre_scores:
-            genre_scores[genre_id] = (genre_scores[genre_id] / max_score) * 100
 
     @staticmethod
     def _persist_genre_preferences(

@@ -53,7 +53,7 @@ print("  Adventure (12): 2.5 [from 1 watchlist]")
 print("  Horror (27):   -3.0 [from 1 dislike]")
 print()
 
-print("Normalized preference scores (0-100):")
+print("Preference scores (raw totals):")
 name_map = {28: "Action", 18: "Drama", 80: "Crime", 12: "Adventure", 27: "Horror"}
 for genre_id, weight in prefs:
     print(f"  {name_map.get(genre_id, f'Genre {genre_id}')}: {weight:.1f}")

@@ -232,20 +232,30 @@ def _build_disliked_movies(interactions_qs, limit=30) -> list[dict[str, Any]]:
 
 
 def _build_watched_movies(interactions_qs, limit=30) -> list[dict[str, Any]]:
-    """Return recent watched events (like/dislike/watched) for dashboard display."""
+    """Return latest unique watched movies (from like/dislike/watched interactions)."""
     watched_rows = interactions_qs.filter(
         interaction_type__in=["like", "dislike", "watched"]
-    ).order_by("-created_at")[:limit]
+    ).order_by("-created_at")
 
-    return [
-        {
+    seen_tmdb_ids = set()
+    watched_movies = []
+
+    for row in watched_rows:
+        if row.movie_tmdb_id in seen_tmdb_ids:
+            continue
+
+        seen_tmdb_ids.add(row.movie_tmdb_id)
+        watched_movies.append({
             "movie_tmdb_id": row.movie_tmdb_id,
             "movie_title": row.movie_title,
             "watched_at": row.created_at,
             "source_interaction": row.interaction_type,
-        }
-        for row in watched_rows
-    ]
+        })
+
+        if len(watched_movies) >= limit:
+            break
+
+    return watched_movies
 
 
 def _build_watchlist_movies(watchlist_qs, limit=30) -> list[dict[str, Any]]:
