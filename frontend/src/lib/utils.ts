@@ -37,6 +37,7 @@ export function ratingColor(rating: number): string {
 }
 
 export function posterUrl(path: string | null, size: "w185" | "w500" | "original" = "w500"): string {
+  // Fall back to a local placeholder so missing posters do not break card layouts.
   if (!path) return "/placeholder-poster.svg";
   if (path.startsWith("http")) return path;
   return `https://image.tmdb.org/t/p/${size}${path}`;

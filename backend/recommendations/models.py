@@ -20,6 +20,7 @@ class UserMovieInteraction(models.Model):
     movie_tmdb_id = models.IntegerField(db_index=True)
     movie_title = models.CharField(max_length=500, blank=True, default="")
     interaction_type = models.CharField(max_length=20, choices=InteractionType.choices)
+    # Callable default intentionally used to avoid shared mutable defaults.
     genre_ids = models.JSONField(default=list, blank=True, help_text="Genre IDs at time of interaction")
     rating = models.FloatField(null=True, blank=True, help_text="User rating 1-10")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -44,7 +45,7 @@ class UserGenrePreference(models.Model):
     )
     genre_tmdb_id = models.IntegerField()
     genre_name = models.CharField(max_length=100)
-    weight = models.FloatField(default=0, help_text="Computed preference score 0-100")
+    weight = models.FloatField(default=0, help_text="Computed preference score based on weighted interactions")
     interaction_count = models.IntegerField(default=0)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -28,6 +28,7 @@ function ThumbnailNav({ movies, activeIndex, onSelect }: ThumbnailNavProps) {
           <button
             key={movieItem.id || movieItem.tmdb_id}
             onClick={() => onSelect(index)}
+            aria-label={`Show featured movie ${index + 1}: ${movieItem.title}`}
             className={`relative w-[60px] h-[90px] rounded-lg overflow-hidden transition-all duration-400 ${
               index === activeIndex
                 ? "ring-2 ring-gold/60 scale-110 shadow-lg shadow-gold/10"
@@ -64,6 +65,7 @@ function SlideIndicators({ movies, activeIndex, progressKey, isPaused, slideDura
         <button
           key={movieItem.id || movieItem.tmdb_id}
           onClick={() => onSelect(index)}
+          aria-label={`Jump to slide ${index + 1}: ${movieItem.title}`}
           className="group relative"
         >
           <div className={`h-[3px] rounded-full transition-all duration-300 ${
@@ -72,11 +74,7 @@ function SlideIndicators({ movies, activeIndex, progressKey, isPaused, slideDura
             {index === activeIndex && (
               <div
                 key={progressKey}
-                className="hero-progress-fill"
-                style={{
-                  animationDuration: `${slideDuration}ms`,
-                  animationPlayState: isPaused ? "paused" : "running",
-                }}
+                className={`hero-progress-fill ${isPaused ? "hero-progress-fill-paused" : ""}`}
               />
             )}
           </div>
@@ -98,6 +96,7 @@ export default function HeroSection({ movies }: HeroSectionProps) {
 
   const goTo = useCallback(
     (index: number) => {
+      // Reset the progress key so the active slide's progress bar restarts cleanly.
       setActiveIndex(index);
       setProgressKey((k) => k + 1);
     },
@@ -114,6 +113,7 @@ export default function HeroSection({ movies }: HeroSectionProps) {
 
   // Auto-advance
   useEffect(() => {
+    // Pause the carousel while the user hovers or when there is only a single hero movie.
     if (isPaused || heroMovies.length <= 1) return;
     const timer = setInterval(goNext, SLIDE_DURATION);
     return () => clearInterval(timer);
@@ -149,8 +149,7 @@ export default function HeroSection({ movies }: HeroSectionProps) {
         return (
           <div
             key={movieItem.id || movieItem.tmdb_id}
-            className="absolute inset-0 transition-opacity duration-[1200ms] ease-in-out"
-            style={{ opacity: index === activeIndex ? 1 : 0 }}
+            className={`absolute inset-0 transition-opacity duration-[1200ms] ease-in-out ${index === activeIndex ? "opacity-100" : "opacity-0"}`}
           >
             {bg && (
               <Image
@@ -236,12 +235,16 @@ export default function HeroSection({ movies }: HeroSectionProps) {
       {/* Navigation arrows  */}
       <button
         onClick={goPrev}
+        aria-label="Previous featured movie"
+        title="Previous featured movie"
         className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full glass flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-300 group"
       >
         <ChevronLeft className="w-5 h-5 text-white/60 group-hover:text-gold transition-colors" />
       </button>
       <button
         onClick={goNext}
+        aria-label="Next featured movie"
+        title="Next featured movie"
         className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full glass flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-300 group"
       >
         <ChevronRight className="w-5 h-5 text-white/60 group-hover:text-gold transition-colors" />

@@ -1,6 +1,6 @@
 
 from django.db import models
-from django.conf import settings
+from .utils.media import build_tmdb_image_url, build_youtube_watch_url, build_youtube_embed_url
 
 
 class Genre(models.Model):
@@ -42,9 +42,7 @@ class Person(models.Model):
 
     @property
     def profile_url(self):
-        if self.profile_path:
-            return f"{settings.TMDB_IMAGE_BASE_URL}/w185{self.profile_path}"
-        return None
+        return build_tmdb_image_url(self.profile_path, "w185")
 
 
 class Movie(models.Model):
@@ -104,33 +102,23 @@ class Movie(models.Model):
 
     @property
     def poster_url(self):
-        if self.poster_path:
-            return f"{settings.TMDB_IMAGE_BASE_URL}/w500{self.poster_path}"
-        return None
+        return build_tmdb_image_url(self.poster_path, "w500")
 
     @property
     def poster_url_small(self):
-        if self.poster_path:
-            return f"{settings.TMDB_IMAGE_BASE_URL}/w185{self.poster_path}"
-        return None
+        return build_tmdb_image_url(self.poster_path, "w185")
 
     @property
     def backdrop_url(self):
-        if self.backdrop_path:
-            return f"{settings.TMDB_IMAGE_BASE_URL}/w1280{self.backdrop_path}"
-        return None
+        return build_tmdb_image_url(self.backdrop_path, "w1280")
 
     @property
     def trailer_url(self):
-        if self.trailer_key:
-            return f"https://www.youtube.com/watch?v={self.trailer_key}"
-        return None
+        return build_youtube_watch_url(self.trailer_key)
 
     @property
     def trailer_embed_url(self):
-        if self.trailer_key:
-            return f"https://www.youtube.com/embed/{self.trailer_key}"
-        return None
+        return build_youtube_embed_url(self.trailer_key)
 
 
 class MovieCast(models.Model):
@@ -172,6 +160,4 @@ class WatchProvider(models.Model):
 
     @property
     def logo_url(self):
-        if self.logo_path:
-            return f"{settings.TMDB_IMAGE_BASE_URL}/w92{self.logo_path}"
-        return None
+        return build_tmdb_image_url(self.logo_path, "w92")

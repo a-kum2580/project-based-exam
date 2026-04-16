@@ -4,6 +4,8 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import { authAPI, setTokens, loadTokens, clearTokens } from "@/lib/api";
 import type { User } from "@/types/movie";
 
+const LOCAL_ACTIVITY_LOG_KEY = "cq_activity_log_days";
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -29,6 +31,7 @@ export function useAuth() {
 }
 
 function toTitleCaseUsername(value: string) {
+  // Preserve separators like underscores and hyphens while making the username display-friendly.
   return value
     .split(/([_\-\s]+)/)
     .map((part) => {
@@ -45,15 +48,45 @@ function normalizeUserProfile(user: User): User {
   };
 }
 
+function formatLocalDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function logLocalActivityDay(): void {
+  if (typeof window === "undefined") return;
+
+  const today = formatLocalDate(new Date());
+
+  try {
+    // Track distinct active days locally so the dashboard can reflect login activity without server writes.
+    const raw = localStorage.getItem(LOCAL_ACTIVITY_LOG_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    const days = Array.isArray(parsed) ? parsed.filter((v) => typeof v === "string") : [];
+
+    if (days.includes(today)) return;
+
+    days.push(today);
+    days.sort();
+    localStorage.setItem(LOCAL_ACTIVITY_LOG_KEY, JSON.stringify(days));
+  } catch {
+    localStorage.setItem(LOCAL_ACTIVITY_LOG_KEY, JSON.stringify([today]));
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refreshUser = useCallback(async () => {
     try {
+      // Restore tokens before requesting the profile so page refreshes keep the user signed in.
       loadTokens();
       const profile = await authAPI.getProfile();
       setUser(normalizeUserProfile(profile));
+      logLocalActivityDay();
     } catch {
       setUser(null);
     }
@@ -65,11 +98,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshUser]);
 
   const login = useCallback(async (username: string, password: string) => {
+    // Login is followed by a profile refresh so the context always contains normalized user data.
     await authAPI.login(username, password);
     await refreshUser();
   }, [refreshUser]);
 
   const register = useCallback(async (username: string, email: string, password: string) => {
+    // Registration auto-logs the user in so the app can move straight into the authenticated flow.
     await authAPI.register(username, email, password);
     await authAPI.login(username, password);
     await refreshUser();

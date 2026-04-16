@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -40,6 +40,7 @@ function useMoodData(activeMood: string) {
   async function fetchMoodMovies(slug: string, p: number) {
     setLoading(true);
     try {
+      // Mood selections are fetched from the API so pagination stays tied to the active mood slug.
       const data = await moviesAPI.getMoodMovies(slug, p);
       setMovies(data.results || []);
       setMoodInfo(data.mood);
@@ -53,6 +54,7 @@ function useMoodData(activeMood: string) {
   }
 
   useEffect(() => {
+    // Auto-scroll the results into view after selection so the movie grid is immediately visible.
     if (!activeMood) return;
     fetchMoodMovies(activeMood, 1);
   }, [activeMood]);
@@ -64,8 +66,25 @@ function MoodContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const activeMood = searchParams.get("mood") || "";
+  const moodPickerRef = useRef<HTMLDivElement | null>(null);
+  const resultsRef = useRef<HTMLDivElement | null>(null);
 
   const { movies, moodInfo, loading, page, totalPages, fetchMoodMovies } = useMoodData(activeMood);
+
+  useEffect(() => {
+    if (!activeMood) return;
+
+    const scrollTimer = window.setTimeout(() => {
+      resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+
+    return () => window.clearTimeout(scrollTimer);
+  }, [activeMood]);
+
+  function scrollToMoodPicker() {
+    // Give users a quick way back to the selector when they want to change their mood.
+    moodPickerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   return (
     <div className="pt-24 pb-20 px-6 md:px-10 lg:px-20 max-w-[1440px] mx-auto">
@@ -86,7 +105,7 @@ function MoodContent() {
       </div>
 
       {/* Mood grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-14">
+      <div ref={moodPickerRef} className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-14 scroll-mt-24">
         {MOODS.map((mood) => {
           const Icon = mood.icon;
           const isActive = activeMood === mood.slug;
@@ -113,13 +132,20 @@ function MoodContent() {
 
       {/* Results */}
       {activeMood && (
-        <div>
+        <div ref={resultsRef} className="scroll-mt-24">
           {moodInfo && (
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
               <div>
                 <h2 className="text-2xl font-bold font-display">{moodInfo.label}</h2>
                 <p className="text-sm text-white/30 mt-0.5">{moodInfo.description}</p>
               </div>
+              <button
+                type="button"
+                onClick={scrollToMoodPicker}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-gold to-gold-dim text-surface-0 text-sm font-semibold shadow-lg shadow-gold/15 hover:brightness-110 transition-all"
+              >
+                Change mood
+              </button>
             </div>
           )}
 

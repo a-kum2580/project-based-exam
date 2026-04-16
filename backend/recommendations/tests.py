@@ -79,11 +79,63 @@ class TrackInteractionAPITest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(UserMovieInteraction.objects.count(), 1)
 
+    def test_track_view(self):
+        data = {
+            "movie_tmdb_id": 550,
+            "movie_title": "Fight Club",
+            "interaction_type": "view",
+            "genre_ids": [28, 18],
+        }
+        response = self.client.post("/api/recommendations/track/", data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(UserMovieInteraction.objects.filter(interaction_type="view").count(), 1)
+
+    def test_track_search(self):
+        data = {
+            "movie_tmdb_id": 18,
+            "movie_title": "Genre: Drama",
+            "interaction_type": "search",
+            "genre_ids": [18],
+        }
+        response = self.client.post("/api/recommendations/track/", data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(UserMovieInteraction.objects.filter(interaction_type="search").count(), 1)
+
     def test_track_unauthenticated(self):
         self.client.force_authenticate(user=None)
         data = {"movie_tmdb_id": 550, "movie_title": "Fight Club", "interaction_type": "like"}
         response = self.client.post("/api/recommendations/track/", data, format="json")
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_untrack_interaction_removes_existing_row(self):
+        UserMovieInteraction.objects.create(
+            user=self.user,
+            movie_tmdb_id=550,
+            movie_title="Fight Club",
+            interaction_type="like",
+            genre_ids=[28],
+        )
+
+        response = self.client.post(
+            "/api/recommendations/untrack/",
+            {"movie_tmdb_id": 550, "interaction_type": "like"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["deleted"], 1)
+        self.assertEqual(
+            UserMovieInteraction.objects.filter(
+                user=self.user,
+                movie_tmdb_id=550,
+                interaction_type="like",
+            ).count(),
+            0,
+        )
+
+    def test_untrack_requires_movie_and_type(self):
+        response = self.client.post("/api/recommendations/untrack/", {"movie_tmdb_id": 550}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
 class WatchlistAPITest(APITestCase):
@@ -147,12 +199,156 @@ class DashboardAPITest(APITestCase):
             user=self.user, movie_tmdb_id=550, movie_title="Fight Club",
             interaction_type="like", genre_ids=[28]
         )
+        UserMovieInteraction.objects.create(
+            user=self.user, movie_tmdb_id=551, movie_title="Heat",
+            interaction_type="dislike", genre_ids=[80]
+        )
         response = self.client.get("/api/recommendations/dashboard/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["summary"]["likes"], 1)
+        self.assertEqual(response.data["summary"]["dislikes"], 1)
+        self.assertEqual(response.data["summary"]["watched"], 2)
+        self.assertEqual(len(response.data["liked_movies"]), 1)
+        self.assertEqual(response.data["liked_movies"][0]["movie_tmdb_id"], 550)
+        self.assertEqual(len(response.data["disliked_movies"]), 1)
+        self.assertEqual(response.data["disliked_movies"][0]["movie_tmdb_id"], 551)
+
+    def test_dashboard_returns_watchlist_movies(self):
+        Watchlist.objects.create(
+            user=self.user,
+            movie_tmdb_id=777,
+            movie_title="Watchlist Movie",
+            watched=False,
+        )
+
+        response = self.client.get("/api/recommendations/dashboard/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["watchlist_movies"]), 1)
+        self.assertEqual(response.data["watchlist_movies"][0]["movie_tmdb_id"], 777)
+
+    def test_dashboard_watched_includes_explicit_watched_interactions(self):
+        UserMovieInteraction.objects.create(
+            user=self.user, movie_tmdb_id=550, movie_title="Fight Club",
+            interaction_type="like", genre_ids=[28]
+        )
+        UserMovieInteraction.objects.create(
+            user=self.user, movie_tmdb_id=551, movie_title="Heat",
+            interaction_type="dislike", genre_ids=[80]
+        )
+        UserMovieInteraction.objects.create(
+            user=self.user, movie_tmdb_id=552, movie_title="Arrival",
+            interaction_type="watched", genre_ids=[878]
+        )
+
+        response = self.client.get("/api/recommendations/dashboard/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["summary"]["watched"], 3)
+        self.assertEqual(len(response.data["watched_movies"]), 3)
+
+    def test_dashboard_liked_movies_are_unique_by_movie(self):
+        UserMovieInteraction.objects.create(
+            user=self.user, movie_tmdb_id=900, movie_title="Movie X",
+            interaction_type="like", genre_ids=[18]
+        )
+        UserMovieInteraction.objects.create(
+            user=self.user, movie_tmdb_id=900, movie_title="Movie X",
+            interaction_type="like", genre_ids=[18]
+        )
+
+        response = self.client.get("/api/recommendations/dashboard/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["liked_movies"]), 1)
+
+    def test_dashboard_watched_movies_are_unique_by_movie(self):
+        UserMovieInteraction.objects.create(
+            user=self.user, movie_tmdb_id=901, movie_title="Movie Y",
+            interaction_type="like", genre_ids=[18]
+        )
+        UserMovieInteraction.objects.create(
+            user=self.user, movie_tmdb_id=901, movie_title="Movie Y",
+            interaction_type="watched", genre_ids=[18]
+        )
+
+        response = self.client.get("/api/recommendations/dashboard/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["watched_movies"]), 1)
+
+    def test_dashboard_genre_ids_are_resolved_to_names(self):
+        UserMovieInteraction.objects.create(
+            user=self.user,
+            movie_tmdb_id=321,
+            movie_title="Genre Mapping Movie",
+            interaction_type="like",
+            genre_ids=[18, 80],
+        )
+
+        response = self.client.get("/api/recommendations/dashboard/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        genre_names = {item["name"] for item in response.data["genre_distribution"]["genres"]}
+        pref_names = {item["name"] for item in response.data["preference_scores"]}
+
+        self.assertIn("Drama", genre_names)
+        self.assertIn("Crime", genre_names)
+        self.assertIn("Drama", pref_names)
+        self.assertIn("Crime", pref_names)
+
+    def test_dashboard_returns_activity_details(self):
+        UserMovieInteraction.objects.create(
+            user=self.user,
+            movie_tmdb_id=777,
+            movie_title="Activity Movie",
+            interaction_type="like",
+            genre_ids=[18],
+        )
+
+        response = self.client.get("/api/recommendations/dashboard/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("activity_details", response.data)
+        self.assertGreaterEqual(len(response.data["activity_details"]), 1)
+
+        first = response.data["activity_details"][0]
+        self.assertIn("date", first)
+        self.assertIn("interaction_type", first)
+        self.assertIn("movie_title", first)
+
+
+class BecauseYouWatchedAPITest(APITestCase):
+    """Tests for the because-you-watched endpoint response shaping."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="watchuser", password="testpass123")
+        self.client.force_authenticate(user=self.user)
+
+    @patch("recommendations.views.get_recommendation_engine")
+    def test_because_you_watched_serializes_nested_movie_groups(self, mock_get_engine):
+        mock_engine = MagicMock()
+        mock_engine.get_because_you_watched.return_value = {
+            "Fight Club": [
+                {
+                    "id": 550,
+                    "title": "Fight Club",
+                    "overview": "",
+                    "release_date": "1999-10-15",
+                    "vote_average": 8.4,
+                    "vote_count": 25000,
+                    "popularity": 50.0,
+                    "poster_path": "/fc.jpg",
+                    "backdrop_path": "/fc_bg.jpg",
+                }
+            ]
+        }
+        mock_get_engine.return_value = mock_engine
+
+        response = self.client.get("/api/recommendations/because-you-watched/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("Fight Club", response.data)
+        self.assertEqual(response.data["Fight Club"][0]["title"], "Fight Club")
+        mock_engine.get_because_you_watched.assert_called_once_with(self.user)
 
 class RecommendationEnginePreferencesTest(TestCase):
-    """Verify the engine computes normalised genre weights from interactions."""
+    """Verify the engine computes raw genre weights from interactions."""
 
     def setUp(self):
         self.user = User.objects.create_user(username="recuser", password="pass12345")
@@ -174,22 +370,22 @@ class RecommendationEnginePreferencesTest(TestCase):
             interaction_type="view", genre_ids=[18],
         )
 
-    def test_genre_weights_normalised_correctly(self):
+    def test_genre_weights_are_raw_totals(self):
         engine = RecommendationEngine()
         prefs = engine.compute_genre_preferences(self.user)
 
-        # prefs is a list of (genre_id, normalised_score) sorted desc
+        # prefs is a list of (genre_id, raw_score) sorted desc
         pref_dict = dict(prefs)
 
-        # Action had raw score 10 → should normalise to 100 (max)
-        self.assertEqual(pref_dict[28], 100.0)
+        # Action had raw score 10
+        self.assertEqual(pref_dict[28], 10.0)
 
-        # Drama had raw score 1 → (1/10)*100 = 10.0
-        self.assertEqual(pref_dict[18], 10.0)
+        # Drama had raw score 1
+        self.assertEqual(pref_dict[18], 1.0)
 
         # Verify DB records were saved
         db_pref = UserGenrePreference.objects.get(user=self.user, genre_tmdb_id=28)
-        self.assertEqual(db_pref.weight, 100.0)
+        self.assertEqual(db_pref.weight, 10.0)
         self.assertEqual(db_pref.genre_name, "Action")
 
 class RecommendationEngineNewUserTest(TestCase):
@@ -212,3 +408,105 @@ class RecommendationEngineNewUserTest(TestCase):
         self.assertEqual(len(movies), 2)
         self.assertEqual(movies[0]["title"], "Trending A")
         mock_trending.assert_called_once()
+
+
+class RecommendationEngineBoundaryTest(TestCase):
+    """Boundary coverage for recommendation fallback and top-genre handling."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="edgeuser", password="pass12345")
+
+    @patch.object(RecommendationEngine, "compute_genre_preferences")
+    @patch.object(TMDBService, "get_trending_movies")
+    def test_empty_top_genres_falls_back_to_trending(self, mock_trending, mock_compute):
+        mock_compute.return_value = []
+        mock_trending.return_value = {"results": [{"id": 1, "title": "Fallback Movie"}]}
+
+        engine = RecommendationEngine()
+        movies = engine.get_recommendations(self.user, page=1)
+
+        self.assertEqual(len(movies), 1)
+        self.assertEqual(movies[0]["title"], "Fallback Movie")
+        mock_trending.assert_called_once_with(page=1)
+
+    @patch.object(TMDBService, "discover_movies")
+    @patch.object(RecommendationEngine, "compute_genre_preferences")
+    def test_single_preference_genre_works(self, mock_compute, mock_discover):
+        mock_compute.return_value = [(28, 100.0)]
+        mock_discover.return_value = {
+            "results": [{"id": 10, "title": "Action Pick", "vote_average": 8.0}],
+        }
+
+        engine = RecommendationEngine()
+        movies = engine.get_recommendations(self.user, page=1)
+
+        self.assertEqual(len(movies), 1)
+        self.assertEqual(movies[0]["title"], "Action Pick")
+        mock_discover.assert_called_once()
+
+    @patch.object(TMDBService, "discover_movies")
+    @patch.object(RecommendationEngine, "compute_genre_preferences")
+    def test_recommendations_deduplicate_seen_and_repeat_movies(self, mock_compute, mock_discover):
+        mock_compute.return_value = [(28, 100.0)]
+        mock_discover.return_value = {
+            "results": [
+                {"id": 200, "title": "Seen Movie", "vote_average": 9.5},
+                {"id": 201, "title": "Unique Movie", "vote_average": 8.0},
+                {"id": 201, "title": "Unique Movie", "vote_average": 8.0},
+                {"id": 202, "title": "Second Movie", "vote_average": 7.0},
+            ],
+        }
+        UserMovieInteraction.objects.create(
+            user=self.user,
+            movie_tmdb_id=200,
+            movie_title="Seen Movie",
+            interaction_type="watched",
+            genre_ids=[28],
+        )
+
+        engine = RecommendationEngine()
+        movies = engine.get_recommendations(self.user, page=1, limit=10)
+
+        movie_ids = [movie["id"] for movie in movies]
+        self.assertEqual(movie_ids, [201, 202])
+        self.assertNotIn(200, movie_ids)
+        self.assertTrue(all("_recommendation_score" not in movie for movie in movies))
+
+
+class RecommendationEnginePolicyInjectionTest(TestCase):
+    """Engine should honor injected interaction-weight policies."""
+
+    class _CustomPolicy:
+        def weight_for(self, interaction_type: str) -> float:
+            if interaction_type == "like":
+                return 10.0
+            if interaction_type == "view":
+                return 1.0
+            return 1.0
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="policyuser", password="pass12345")
+        Genre.objects.create(tmdb_id=28, name="Action", slug="action")
+        Genre.objects.create(tmdb_id=18, name="Drama", slug="drama")
+
+        UserMovieInteraction.objects.create(
+            user=self.user,
+            movie_tmdb_id=11,
+            movie_title="Movie Like",
+            interaction_type="like",
+            genre_ids=[28],
+        )
+        UserMovieInteraction.objects.create(
+            user=self.user,
+            movie_tmdb_id=12,
+            movie_title="Movie View",
+            interaction_type="view",
+            genre_ids=[18],
+        )
+
+    def test_custom_weight_policy_changes_raw_scores(self):
+        engine = RecommendationEngine(weight_policy=self._CustomPolicy())
+        prefs = dict(engine.compute_genre_preferences(self.user))
+
+        self.assertEqual(prefs[28], 10.0)
+        self.assertEqual(prefs[18], 1.0)
