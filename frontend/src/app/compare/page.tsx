@@ -230,13 +230,11 @@ export default function ComparePage() {
   const [searchingA, setSearchingA] = useState(false);
   const [searchingB, setSearchingB] = useState(false);
 
-  // Refs for debouncing and input values
   const timeoutRefA = useRef<NodeJS.Timeout | null>(null);
   const timeoutRefB = useRef<NodeJS.Timeout | null>(null);
   const inputRefA = useRef<HTMLInputElement>(null);
   const inputRefB = useRef<HTMLInputElement>(null);
 
-  // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
       if (timeoutRefA.current) clearTimeout(timeoutRefA.current);
@@ -273,12 +271,10 @@ export default function ComparePage() {
 
     const timeoutRef = side === "A" ? timeoutRefA : timeoutRefB;
 
-    // Clear previous timeout
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
 
-    // Set new timeout
     timeoutRef.current = setTimeout(() => {
       searchMovies(query, side);
     }, 500);
@@ -310,17 +306,14 @@ export default function ComparePage() {
   function swapMovies() {
     if (!movieA || !movieB) return;
 
-    // Swap movies
     setMovieA(movieB);
     setMovieB(movieA);
 
-    // Swap input values
     const tempValueA = inputRefA.current?.value || "";
     const tempValueB = inputRefB.current?.value || "";
     if (inputRefA.current) inputRefA.current.value = tempValueB;
     if (inputRefB.current) inputRefB.current.value = tempValueA;
 
-    // Swap results
     setResultsA(resultsB);
     setResultsB(resultsA);
   }
@@ -329,7 +322,6 @@ export default function ComparePage() {
 
   return (
     <div className="pt-24 pb-20 px-6 md:px-10 lg:px-20 max-w-[1200px] mx-auto">
-      {/* Header */}
       <div className="text-center mb-10">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gold/10 border border-gold/15 mb-5">
           <ArrowLeftRight className="w-3.5 h-3.5 text-gold" />
@@ -343,7 +335,6 @@ export default function ComparePage() {
         </p>
       </div>
 
-      {/* Movie Selectors */}
       <div className="flex items-start gap-6 mb-12">
         <MovieSelector
           side="A"
@@ -379,7 +370,6 @@ export default function ComparePage() {
         />
       </div>
 
-      {/* Comparison results */}
       {bothSelected && (
         <div className="glass-card rounded-2xl p-6 md:p-8 animate-slide-up">
           <div className="h-px bg-gradient-to-r from-transparent via-gold/15 to-transparent mb-6" />
@@ -393,7 +383,6 @@ export default function ComparePage() {
           <CompareBar label="Budget" valueA={movieA.budget || 0} valueB={movieB.budget || 0} higher="higher" />
           <CompareBar label="Revenue" valueA={movieA.revenue || 0} valueB={movieB.revenue || 0} higher="higher" />
 
-          {/* Genres comparison */}
           <div className="mt-6 pt-6 border-t border-white/[0.04]">
             <p className="text-[11px] uppercase tracking-wider text-white/25 font-semibold text-center mb-4">Genres</p>
             <div className="flex gap-6">
@@ -403,7 +392,6 @@ export default function ComparePage() {
             </div>
           </div>
 
-          {/* Cast comparison */}
           <div className="mt-6 pt-6 border-t border-white/[0.04]">
             <p className="text-[11px] uppercase tracking-wider text-white/25 font-semibold text-center mb-4">Top Cast</p>
             <div className="flex gap-6">

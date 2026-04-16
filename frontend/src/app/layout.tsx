@@ -8,11 +8,6 @@ export const metadata: Metadata = {
   title: "CineQuest: Discover Your Next Favorite Movie",
   description:
     "Cinematic movie recommendations based on your taste. Explore genres, directors, and discover hidden gems.",
-  icons: {
-    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
-    shortcut: "/icon.svg",
-    apple: "/icon.svg",
-  },
 };
 
 export default function RootLayout({
@@ -21,8 +16,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="noise">
-      <body className="min-h-screen flex flex-col relative">
+    <html lang="en" className="noise" suppressHydrationWarning>
+      <body className="min-h-screen flex flex-col relative" suppressHydrationWarning>
         <div className="ambient-orb ambient-orb-1" />
         <div className="ambient-orb ambient-orb-2" />
 

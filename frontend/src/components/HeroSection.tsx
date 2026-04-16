@@ -166,13 +166,11 @@ export default function HeroSection({ movies }: HeroSectionProps) {
         );
       })}
 
-      {/* Gradient overlays */}
       <div className="hero-gradient absolute inset-0" />
       <div className="hero-side-gradient absolute inset-0" />
 
       <div className="absolute bottom-0 left-0 right-0 px-6 md:px-10 lg:px-20 pb-36 z-10">
         <div key={activeIndex} className="max-w-2xl animate-slide-up">
-          {/* Top line */}
           <div className="flex items-center gap-3 mb-4">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gold/10 border border-gold/20 text-[11px] font-semibold uppercase tracking-widest text-gold">
               <span className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse" />
@@ -189,17 +187,14 @@ export default function HeroSection({ movies }: HeroSectionProps) {
             )}
           </div>
 
-          {/* Title */}
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold font-display leading-[1.05] mb-5 text-white drop-shadow-2xl">
             {movie.title}
           </h1>
 
-          {/* Overview */}
           <p className="text-base md:text-lg text-white/50 line-clamp-2 mb-6 max-w-xl leading-relaxed">
             {movie.overview}
           </p>
 
-          {/* Genres */}
           {movie.genres && movie.genres.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-7">
               {movie.genres.slice(0, 4).map((genre: any) => (
@@ -213,7 +208,6 @@ export default function HeroSection({ movies }: HeroSectionProps) {
             </div>
           )}
 
-          {/* CTA buttons */}
           <div className="flex items-center gap-3">
             <Link
               href={`/movie/${movie.tmdb_id || movie.id}`}
@@ -233,7 +227,6 @@ export default function HeroSection({ movies }: HeroSectionProps) {
         </div>
       </div>
 
-      {/* Navigation arrows  */}
       <button
         onClick={goPrev}
         className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full glass flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-300 group"

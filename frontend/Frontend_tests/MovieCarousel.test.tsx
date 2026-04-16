@@ -44,11 +44,9 @@ describe('MovieCarousel Rendering & Interaction', () => {
       value: 494, // 494 * 0.85 = 419.9 => rounded to 420
     });
 
-    // Test user interactions on the control buttons
     const leftButton = screen.getByLabelText('Scroll left');
     const rightButton = screen.getByLabelText('Scroll right');
     
-    // Scroll Right
     fireEvent.click(rightButton);
     expect(scrollByMock).toHaveBeenCalledTimes(1);
     expect(scrollByMock).toHaveBeenCalledWith(expect.objectContaining({ left: 420 }));
@@ -56,7 +54,6 @@ describe('MovieCarousel Rendering & Interaction', () => {
     // Reset mock for the next interaction to ensure isolation
     scrollByMock.mockClear();
 
-    // Scroll Left
     fireEvent.click(leftButton);
     expect(scrollByMock).toHaveBeenCalledTimes(1);
     expect(scrollByMock).toHaveBeenCalledWith(expect.objectContaining({ left: -420 }));

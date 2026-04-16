@@ -47,7 +47,6 @@ export default function HomePage() {
 
       <div className="relative z-10 pt-8 sm:pt-10 lg:pt-12 space-y-20 pb-24">
 
-        {/* Trending this week */}
         <MovieCarousel
           title="Trending This Week"
           subtitle="The most talked about movies right now"
@@ -59,7 +58,6 @@ export default function HomePage() {
 
         <SectionDivider />
 
-        {/* Genre grid */}
         <section className="px-6 md:px-10 lg:px-20">
           <div className="flex items-center gap-4 mb-8">
             <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center">
@@ -79,17 +77,14 @@ export default function HomePage() {
 
         <SectionDivider />
 
-        {/* Mood picker teaser */}
         <MoodTeaser />
 
         <SectionDivider />
 
-        {/* Personalized recommendations */}
         <PersonalizedSection movies={topRated} />
 
         <SectionDivider />
 
-        {/* Now in theatres */}
         <MovieCarousel
           title="Now in Theatres"
           subtitle="Currently showing on the big screen"
@@ -101,7 +96,6 @@ export default function HomePage() {
 
         <div className="section-divider mx-6 md:mx-10 lg:mx-20" />
 
-        {/* Top rated */}
         <MovieCarousel
           title="Highest Rated of All Time"
           subtitle="The greatest films ever made, by audience score"
