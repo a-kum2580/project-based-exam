@@ -91,6 +91,7 @@ def _fetch_movies_for_comparison(catalog_service: MovieCatalogService, ids: list
 def _normalize_search_text(value: str | None) -> str:
     if not value:
       return ""
+        # Collapse punctuation and repeated whitespace so ranking compares tokens rather than formatting.
     normalized = "".join(character.lower() if character.isalnum() else " " for character in value)
     return " ".join(normalized.split())
 
@@ -138,6 +139,7 @@ def _search_result_similarity(query: str, result: dict) -> float:
 
 
 def _sort_search_results_by_similarity(query: str, results: list[dict]) -> list[dict]:
+    # Preserve the original API order for ties so pagination remains stable.
     ranked_results = [
         (index, result, _search_result_similarity(query, result))
         for index, result in enumerate(results)
@@ -262,6 +264,7 @@ def search_movies(request) -> Response:
 
     tmdb_service = get_tmdb_service()
     catalog_service = get_movie_catalog_service(tmdb_service=tmdb_service)
+    # Re-rank the remote search results locally so the most relevant titles rise to the top.
     data = catalog_service.search_movies(query, page=page)
     TMDBErrorValidator.ensure_ok(data, request=request, context="search_movies")
     results = _sort_search_results_by_similarity(query, data.get("results", []))
@@ -359,6 +362,7 @@ def search_people(request) -> Response:
     catalog_service = get_movie_catalog_service()
     data = catalog_service.search_people(query)
     TMDBErrorValidator.ensure_ok(data, request=request, context="search_people")
+    # Apply the same ranking rules for people search so the UI feels consistent.
     results = _sort_search_results_by_similarity(query, data.get("results", []))
     return Response({**data, "results": results})
 

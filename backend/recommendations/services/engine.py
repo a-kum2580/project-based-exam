@@ -133,6 +133,7 @@ class RecommendationEngine:
         genre_names: dict[int, str],
     ) -> None:
         for interaction in interactions:
+            # The weight policy centralizes how each user action influences genre preference.
             weight = self.weight_policy.weight_for(interaction.interaction_type)
             for genre_id in interaction.genre_ids:
                 genre_scores[genre_id] += weight
@@ -149,6 +150,7 @@ class RecommendationEngine:
         preference_model,
     ) -> None:
         for genre_id, score in genre_scores.items():
+            # Persist the computed score so the dashboard and recommender read the same source of truth.
             preference_model.objects.update_or_create(
                 user=user,
                 genre_tmdb_id=genre_id,
@@ -176,6 +178,7 @@ class RecommendationEngine:
     def _collect_top_genre_movies(self, top_genres: list[tuple[int, float]], page: int) -> list[dict[str, Any]]:
         all_movies: list[dict[str, Any]] = []
         for genre_id, score in top_genres:
+            # Pull each top genre separately, then attach a weighted recommendation score before deduping.
             data = self.tmdb.discover_movies(
                 with_genres=genre_id,
                 sort_by="vote_average.desc",
@@ -194,6 +197,7 @@ class RecommendationEngine:
         seen_in_batch = set()
         unique_movies = []
         for movie in all_movies:
+            # Remove duplicates both against prior history and within the current recommendation batch.
             movie_id = movie["id"]
             if movie_id not in seen_ids and movie_id not in seen_in_batch:
                 seen_in_batch.add(movie_id)

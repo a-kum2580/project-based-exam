@@ -40,6 +40,7 @@ function useMoodData(activeMood: string) {
   async function fetchMoodMovies(slug: string, p: number) {
     setLoading(true);
     try {
+      // Mood selections are fetched from the API so pagination stays tied to the active mood slug.
       const data = await moviesAPI.getMoodMovies(slug, p);
       setMovies(data.results || []);
       setMoodInfo(data.mood);
@@ -53,6 +54,7 @@ function useMoodData(activeMood: string) {
   }
 
   useEffect(() => {
+    // Auto-scroll the results into view after selection so the movie grid is immediately visible.
     if (!activeMood) return;
     fetchMoodMovies(activeMood, 1);
   }, [activeMood]);
@@ -80,6 +82,7 @@ function MoodContent() {
   }, [activeMood]);
 
   function scrollToMoodPicker() {
+    // Give users a quick way back to the selector when they want to change their mood.
     moodPickerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 

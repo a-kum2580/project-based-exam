@@ -84,6 +84,7 @@ def _build_genre_distribution(interactions_qs, limit=10) -> dict[str, Any]:
 
     genre_counter = Counter()
     for interaction in interactions_qs.filter(interaction_type__in=["like", "watched", "watchlist"]):
+        # Count every genre attached to a movie so multi-genre titles contribute to each label.
         for gid in interaction.genre_ids:
             genre_counter[gid] += 1
 
@@ -126,6 +127,7 @@ def _build_activity_details(interactions_qs, days=31) -> list[dict[str, Any]]:
 
     details = []
     for row in rows:
+        # Keep the payload flat so the frontend can group activity by day without more API calls.
         details.append({
             "date": str(row.created_at.date()),
             "movie_tmdb_id": row.movie_tmdb_id,
@@ -165,6 +167,7 @@ def _build_dashboard_summary(interactions, watchlist) -> dict[str, Any]:
     dislikes_count = interactions.filter(interaction_type="dislike").values("movie_tmdb_id").distinct().count()
     explicit_watched_count = interactions.filter(interaction_type="watched").values("movie_tmdb_id").distinct().count()
 
+    # Summary cards intentionally count distinct movies for likes/dislikes so repeated interactions do not inflate the UI.
     summary = {
         "total_interactions": interactions.count(),
         "likes": likes_count,
@@ -400,6 +403,7 @@ def dashboard_stats(request):
     interactions = UserMovieInteraction.objects.filter(user=user)
     watchlist = Watchlist.objects.filter(user=user)
 
+    # Build each dashboard section independently so the client gets one complete payload.
     summary = _build_dashboard_summary(interactions, watchlist)
 
     return Response({

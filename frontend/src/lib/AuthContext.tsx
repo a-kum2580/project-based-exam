@@ -31,6 +31,7 @@ export function useAuth() {
 }
 
 function toTitleCaseUsername(value: string) {
+  // Preserve separators like underscores and hyphens while making the username display-friendly.
   return value
     .split(/([_\-\s]+)/)
     .map((part) => {
@@ -60,6 +61,7 @@ function logLocalActivityDay(): void {
   const today = formatLocalDate(new Date());
 
   try {
+    // Track distinct active days locally so the dashboard can reflect login activity without server writes.
     const raw = localStorage.getItem(LOCAL_ACTIVITY_LOG_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
     const days = Array.isArray(parsed) ? parsed.filter((v) => typeof v === "string") : [];
@@ -80,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     try {
+      // Restore tokens before requesting the profile so page refreshes keep the user signed in.
       loadTokens();
       const profile = await authAPI.getProfile();
       setUser(normalizeUserProfile(profile));
@@ -95,11 +98,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshUser]);
 
   const login = useCallback(async (username: string, password: string) => {
+    // Login is followed by a profile refresh so the context always contains normalized user data.
     await authAPI.login(username, password);
     await refreshUser();
   }, [refreshUser]);
 
   const register = useCallback(async (username: string, email: string, password: string) => {
+    // Registration auto-logs the user in so the app can move straight into the authenticated flow.
     await authAPI.register(username, email, password);
     await authAPI.login(username, password);
     await refreshUser();
