@@ -32,6 +32,7 @@ class MovieDiscoveryService:
         import hashlib
         import json
 
+        # Sort keys so equivalent filter payloads produce the same cache entry.
         serialized = json.dumps(payload, sort_keys=True)
         digest = hashlib.md5(serialized.encode("utf-8")).hexdigest()
         return f"advanced-filter:{digest}"
@@ -150,6 +151,7 @@ class MovieDiscoveryService:
         }
 
     def _scan_query_results(self, filters: dict) -> tuple[list[dict], int]:
+        # Search requests may need to inspect multiple TMDB pages before the requested page can be built.
         first_page_data = self.tmdb.search_movies(filters["q"], page=1)
         TMDBErrorValidator.ensure_ok(first_page_data)
 
@@ -167,6 +169,7 @@ class MovieDiscoveryService:
         empty_pages = 0 if filtered else 1
 
         for scan_page in range(2, max_scan_pages + 1):
+            # Stop early once we have enough matches or the search stops producing useful pages.
             if self._should_stop_scan(
                 current_count=len(filtered),
                 target_count=target_results,
@@ -204,6 +207,7 @@ class MovieDiscoveryService:
         }
 
     def _build_discover_params(self, filters: dict) -> dict:
+        # Only send filters that were actually supplied so the TMDB request stays minimal.
         params = {"page": filters["page"]}
 
         if filters["genre"]:
@@ -230,6 +234,7 @@ class MovieDiscoveryService:
         return params
 
     def _sort_movies(self, movies: list[dict], sort: str):
+        # Keep the original order unless the caller asks for a supported sort key.
         sort_map = {
             "popularity.desc": lambda m: self._safe_float(m.get("popularity"), 0.0) or 0.0,
             "vote_average.desc": lambda m: self._safe_float(m.get("vote_average"), 0.0) or 0.0,

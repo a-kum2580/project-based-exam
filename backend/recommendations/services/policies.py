@@ -17,6 +17,7 @@ class InteractionWeightPolicy(Protocol):
 
 class DefaultInteractionWeightPolicy:
     def __init__(self, weights: Mapping[str, float] | None = None):
+        # Allow tests or future feature work to override the default action weights without editing engine code.
         self._weights = dict(weights or INTERACTION_WEIGHTS)
 
     def weight_for(self, interaction_type: str) -> float:

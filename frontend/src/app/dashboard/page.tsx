@@ -34,6 +34,7 @@ export default function DashboardPage() {
   }, [isAuthenticated]);
 
   useEffect(() => {
+    // Keep the opened list panel in view so the title and hide action remain visible.
     if (!activeList) return;
 
     const scrollTimer = window.setTimeout(() => {
@@ -45,6 +46,7 @@ export default function DashboardPage() {
 
   async function fetchDashboard() {
     try {
+      // One dashboard request brings back every summary block so the UI can render from a single payload.
       const data = await recommendationsAPI.getDashboard();
       setStats(data);
     } catch (err) {
@@ -171,6 +173,7 @@ export default function DashboardPage() {
   }
 
   function getItemDate(item: any) {
+    // These list rows come from different models, so normalise the timestamp field before display.
     const raw = item.liked_at || item.disliked_at || item.watched_at || item.added_at;
     return raw ? new Date(raw).toLocaleDateString() : "";
   }
@@ -187,6 +190,7 @@ export default function DashboardPage() {
 
   function getPreferenceDisplayValue(weight: number) {
     if (preferenceDisplayMode === "percentage") {
+      // Show the score relative to the strongest genre without refetching any dashboard data.
       return `${((weight / maxPrefWeight) * 100).toFixed(1)}%`;
     }
 

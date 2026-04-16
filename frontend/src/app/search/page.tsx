@@ -65,6 +65,7 @@ function SearchContent() {
   const hasActiveFilters = !!(filterGenre || filterYearFrom || filterYearTo || filterRating || filterRuntimeMin || filterRuntimeMax || filterLanguage);
 
   useEffect(() => {
+    // Treat the URL as the source of truth so browser navigation keeps the search bar in sync.
     if (initialQuery) {
       resetFiltersForNewSearch();
       performSearch(initialQuery, 1);
@@ -122,6 +123,7 @@ function SearchContent() {
   async function applyFilters(p: number = 1) {
     setLoading(true);
     try {
+      // Run the discover endpoint so search text can be refined with genre, runtime, language, and sort filters.
       const params: Record<string, string | number> = {
         sort: filterSort,
         page: p,
@@ -178,6 +180,7 @@ function SearchContent() {
     const normalizedQuery = query.trim();
     if (!normalizedQuery) return;
 
+    // Push the search term into the URL so the page can rehydrate from a shareable query state.
     resetFiltersForNewSearch();
     router.push(`/search?q=${encodeURIComponent(normalizedQuery)}`);
   }

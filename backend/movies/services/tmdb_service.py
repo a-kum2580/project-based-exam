@@ -39,6 +39,7 @@ class TMDBService:
             logger.error("TMDB_API_KEY is missing")
             return {"_error": "TMDB_API_KEY is missing"}
 
+        # Cache by endpoint and normalized params so equivalent requests reuse the same payload.
         normalized_params = json.dumps(params or {}, sort_keys=True)
         cache_key = f"tmdb:{endpoint}:{normalized_params}"
         cached = cache.get(cache_key)
@@ -110,6 +111,7 @@ class TMDBService:
         Supports: with_genres, sort_by, primary_release_year,
                   vote_average.gte, with_people, etc.
         """
+        # Keep this as a thin wrapper so callers can pass raw TMDB discover parameters directly.
         return self._get("discover/movie", kwargs)
 
 
