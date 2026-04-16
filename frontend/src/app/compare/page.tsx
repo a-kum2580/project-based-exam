@@ -220,6 +220,7 @@ interface CastListProps {
 function CastList({ cast, align }: CastListProps) {
   return <div className="flex-1 space-y-1.5">{(cast || []).slice(0, 5).map((castMember) => <CastMemberCard key={castMember.id} member={castMember} align={align} />)}</div>;
 }
+
 export default function ComparePage() {
   const [resultsA, setResultsA] = useState<MovieCompact[]>([]);
   const [resultsB, setResultsB] = useState<MovieCompact[]>([]);
