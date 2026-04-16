@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, type RefObject } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -65,7 +65,7 @@ interface MovieSelectorProps {
   results: any[];
   searching: boolean;
   movie: any;
-  inputRef: React.RefObject<HTMLInputElement>;
+  inputRef: RefObject<HTMLInputElement>;
   onSearch: (query: string, side: "A" | "B") => void;
   onSelect: (tmdbId: number, side: "A" | "B") => void;
   onClear: () => void;

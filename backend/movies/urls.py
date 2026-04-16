@@ -3,9 +3,9 @@ from rest_framework.routers import DefaultRouter
 from . import views
 
 router = DefaultRouter()
-router.register(r"list", views.MovieViewSet, basename="movie")
 router.register(r"genres", views.GenreViewSet, basename="genre")
 router.register(r"people", views.PersonViewSet, basename="person")
+router.register(r"", views.MovieViewSet, basename="movie")
 
 urlpatterns = [
     path("search/", views.search_movies, name="search-movies"),
@@ -18,5 +18,8 @@ urlpatterns = [
     path("moods/<str:mood_slug>/", views.mood_movies, name="mood-movies"),
     path("discover/", views.discover_filtered, name="discover-filtered"),
     path("compare/", views.compare_movies, name="compare-movies"),
+    # Backward-compatible aliases for older frontend routes.
+    path("list/", views.MovieViewSet.as_view({"get": "list"}), name="movie-list-legacy"),
+    path("list/<int:pk>/", views.MovieViewSet.as_view({"get": "retrieve"}), name="movie-detail-legacy"),
     path("", include(router.urls)),
 ]

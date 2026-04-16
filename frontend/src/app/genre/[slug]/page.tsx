@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import MovieCard, { MovieCardSkeleton } from "@/components/MovieCard";
-import { genresAPI } from "@/lib/api";
+import { genresAPI, moviesAPI, recommendationsAPI } from "@/lib/api";
 import type { MovieCompact } from "@/types/movie";
 
 function GenreContent() {
@@ -13,6 +13,7 @@ function GenreContent() {
   const searchParams = useSearchParams();
   const slug = params.slug as string;
   const genreId = searchParams.get("id");
+  const trackedSearchRef = useRef<string | null>(null);
 
   const [movies, setMovies] = useState<MovieCompact[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,17 +29,39 @@ function GenreContent() {
     async function fetchMovies() {
       setLoading(true);
       try {
-        const data = await genresAPI.getMovies(slug, page);
+        const data = genreId
+          ? await moviesAPI.discover({ genre: genreId, page, sort: "popularity.desc" })
+          : await genresAPI.getMovies(slug, page);
         setMovies(data.results || []);
         setTotalPages(data.total_pages || 1);
+
+        if (genreId && trackedSearchRef.current !== genreId) {
+          trackedSearchRef.current = genreId;
+          const parsedGenreId = Number(genreId);
+          const selectedGenreName = slug
+            .split("-")
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(" ");
+
+          recommendationsAPI.trackInteraction({
+            movie_tmdb_id: parsedGenreId,
+            movie_title: `Genre: ${selectedGenreName}`,
+            interaction_type: "search",
+            genre_ids: Number.isFinite(parsedGenreId) ? [parsedGenreId] : [],
+          }).catch((err) => {
+            console.error("Failed to persist genre search interaction:", err);
+          });
+        }
       } catch (err) {
         console.error(err);
+        setMovies([]);
+        setTotalPages(1);
       } finally {
         setLoading(false);
       }
     }
     fetchMovies();
-  }, [slug, page]);
+  }, [slug, page, genreId]);
 
   return (
     <div className="pt-24 pb-20 px-6 md:px-12 lg:px-20 max-w-[1400px] mx-auto">

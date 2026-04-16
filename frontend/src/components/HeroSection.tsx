@@ -140,7 +140,7 @@ export default function HeroSection({ movies }: HeroSectionProps) {
 
   return (
     <div
-      className="relative min-h-[70vh] sm:min-h-[80vh] lg:h-[92vh] overflow-hidden"
+      className="relative isolate z-20 mb-8 sm:mb-10 lg:mb-12 min-h-[70vh] sm:min-h-[80vh] lg:h-[92vh] overflow-hidden"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >

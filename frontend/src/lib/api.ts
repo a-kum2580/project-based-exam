@@ -48,6 +48,10 @@ async function apiFetch<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
+  if (!accessToken && typeof window !== "undefined") {
+    loadTokens();
+  }
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
@@ -80,6 +84,9 @@ async function apiFetch<T>(
         headers,
       });
       if (!retryRes.ok) throw new Error(`API error: ${retryRes.status}`);
+      if (retryRes.status === 204) {
+        return null as T;
+      }
       return retryRes.json();
     } else {
       clearTokens();
@@ -88,7 +95,30 @@ async function apiFetch<T>(
   }
 
   if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+    let message = `API error: ${response.status}`;
+    try {
+      const errorData = await response.json();
+      if (typeof errorData === "string") {
+        message = errorData;
+      } else if (errorData?.detail) {
+        message = errorData.detail;
+      } else if (typeof errorData === "object" && errorData !== null) {
+        const firstKey = Object.keys(errorData)[0];
+        const firstValue = errorData[firstKey];
+        if (Array.isArray(firstValue) && firstValue.length) {
+          message = String(firstValue[0]);
+        } else if (typeof firstValue === "string") {
+          message = firstValue;
+        }
+      }
+    } catch {
+      // Keep default message if response body is not JSON
+    }
+    throw new Error(message);
+  }
+
+  if (response.status === 204) {
+    return null as T;
   }
 
   return response.json();
@@ -211,6 +241,15 @@ export const recommendationsAPI = {
     rating?: number;
   }) =>
     apiFetch("/recommendations/track/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  untrackInteraction: (data: {
+    movie_tmdb_id: number;
+    interaction_type: string;
+  }) =>
+    apiFetch<{ deleted: number }>("/recommendations/untrack/", {
       method: "POST",
       body: JSON.stringify(data),
     }),
