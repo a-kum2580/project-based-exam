@@ -9,6 +9,33 @@ import {
 import { useAuth } from "@/lib/AuthContext";
 import { recommendationsAPI } from "@/lib/api";
 
+const LOCAL_ACTIVITY_LOG_KEY = "cq_activity_log_days";
+
+function formatLocalDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function getLocalActivityDaysInLast30(): string[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = localStorage.getItem(LOCAL_ACTIVITY_LOG_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    const days = Array.isArray(parsed) ? parsed.filter((v) => typeof v === "string") : [];
+
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 29);
+    const cutoffStr = formatLocalDate(cutoff);
+
+    return days.filter((day) => day >= cutoffStr);
+  } catch {
+    return [];
+  }
+}
+
 export default function DashboardPage() {
   const { user, isAuthenticated, loading: authLoading } = useAuth();
   const [stats, setStats] = useState<any>(null);
@@ -88,6 +115,21 @@ export default function DashboardPage() {
   const watchlistMovies = stats?.watchlist_movies || [];
   const maxGenreCount = Math.max(...genreDist.map((g: any) => g.count), 1);
   const maxPrefWeight = Math.max(...prefScores.map((p: any) => p.weight), 1);
+  const localActivityDays = getLocalActivityDaysInLast30();
+
+  const mergedTimelineMap = new Map<string, number>();
+  timeline.forEach((day: any) => {
+    mergedTimelineMap.set(day.date, Number(day.count) || 0);
+  });
+  localActivityDays.forEach((day) => {
+    mergedTimelineMap.set(day, (mergedTimelineMap.get(day) || 0) + 1);
+  });
+
+  const mergedTimeline = Array.from(mergedTimelineMap.entries())
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const activeDays = mergedTimeline.filter((day) => day.count > 0).length;
+  const hasAnyActivity = (summary.total_interactions || 0) > 0 || mergedTimeline.length > 0;
 
   const interactionWeightKey = [
     { type: "Like", weight: "+5.0", color: "text-emerald-400" },
@@ -322,15 +364,16 @@ export default function DashboardPage() {
       </div>
 
       {/* Activity timeline */}
-      {timeline.length > 0 && (
+      {mergedTimeline.length > 0 && (
         <div className="glass-card rounded-xl p-6 mb-10">
           <div className="flex items-center gap-2 mb-5">
             <Clock className="w-4 h-4 text-gold" />
             <h2 className="text-lg font-bold font-display">Activity (Last 30 Days)</h2>
+            <span className="text-xs text-white/30 ml-auto">{activeDays} active days</span>
           </div>
           <div className="flex items-end gap-1 h-32">
-            {timeline.map((day: any) => {
-              const maxCount = Math.max(...timeline.map((d: any) => d.count), 1);
+            {mergedTimeline.map((day: any) => {
+              const maxCount = Math.max(...mergedTimeline.map((d: any) => d.count), 1);
               const height = (day.count / maxCount) * 100;
               return (
                 <div
@@ -347,8 +390,8 @@ export default function DashboardPage() {
             })}
           </div>
           <div className="flex justify-between text-[10px] text-white/15 mt-2">
-            <span>{timeline[0]?.date}</span>
-            <span>{timeline[timeline.length - 1]?.date}</span>
+            <span>{mergedTimeline[0]?.date}</span>
+            <span>{mergedTimeline[mergedTimeline.length - 1]?.date}</span>
           </div>
         </div>
       )}
@@ -387,7 +430,7 @@ export default function DashboardPage() {
       )}
 
       {/* Empty state */}
-      {summary.total_interactions === 0 && (
+      {!hasAnyActivity && (
         <div className="text-center py-16 glass-card rounded-2xl">
           <BarChart3 className="w-10 h-10 text-gold/20 mx-auto mb-4" />
           <h3 className="text-xl font-bold font-display mb-2">No activity yet</h3>

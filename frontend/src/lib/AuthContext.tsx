@@ -4,6 +4,8 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import { authAPI, setTokens, loadTokens, clearTokens } from "@/lib/api";
 import type { User } from "@/types/movie";
 
+const LOCAL_ACTIVITY_LOG_KEY = "cq_activity_log_days";
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -45,6 +47,33 @@ function normalizeUserProfile(user: User): User {
   };
 }
 
+function formatLocalDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function logLocalActivityDay(): void {
+  if (typeof window === "undefined") return;
+
+  const today = formatLocalDate(new Date());
+
+  try {
+    const raw = localStorage.getItem(LOCAL_ACTIVITY_LOG_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    const days = Array.isArray(parsed) ? parsed.filter((v) => typeof v === "string") : [];
+
+    if (days.includes(today)) return;
+
+    days.push(today);
+    days.sort();
+    localStorage.setItem(LOCAL_ACTIVITY_LOG_KEY, JSON.stringify(days));
+  } catch {
+    localStorage.setItem(LOCAL_ACTIVITY_LOG_KEY, JSON.stringify([today]));
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loadTokens();
       const profile = await authAPI.getProfile();
       setUser(normalizeUserProfile(profile));
+      logLocalActivityDay();
     } catch {
       setUser(null);
     }
