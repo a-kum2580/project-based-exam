@@ -14,14 +14,16 @@ Scope and method:
 
 ```mermaid
 pie title Commit Share by Member (Total = 101)
-  "Shiramiki" : 37
-  "a-kum2580" : 28
-  "Charis-Opol" : 8
+  "Shiramiki (Isooba M Rachel)" : 43
+  "a-kum2580" : 30
+  "Charis-Opol" : 23
   "Emma k" : 8
   "Ariko Ethan" : 5
-  "Isooba Mbeiza Rachel" : 3
   "Anthony Ssetimba" : 3
-  "Others" : 9
+  "Newtonhaider (kizito Newton)": 7
+  "CarolNaddunga": 7
+  "Asingura-Philip" :6
+  "Kingcord15(Lomoropaul5)" : 2
 ```
 
 ### Top Contributors by Files Touched
@@ -29,33 +31,31 @@ pie title Commit Share by Member (Total = 101)
 ```mermaid
 xychart-beta
   title "Top Contributors - Files Touched"
-  x-axis ["Shiramiki", "muganga-charles", "a-kum2580", "Charis-Opol", "Emma k"]
+  x-axis ["Shiramiki", "a-kum2580", "Charis-Opol", "Emma k"]
   y-axis "Files" 0 --> 140
-  bar [131, 77, 32, 16, 8]
+  bar [131,32, 16, 8]
 ```
 
 ## 2) Summary Table (non-merge commits)
 
 | Member | Commits | Files Touched | Insertions | Deletions |
 |---|---:|---:|---:|---:|
-| Shiramiki | 37 | 131 | 4164 | 1218 |
-| a-kum2580 | 28 | 32 | 1102 | 680 |
-| Charis-Opol | 8 | 16 | 584 | 395 |
+| Shiramiki | 43 | 52 | 4496 | 1478 |
+| a-kum2580 | 30 | 25 | 1155 | 682 |
+| Charis-Opol | 23 | 23 | 8855 | 3394 |
 | Emma k | 8 | 8 | 32 | 46 |
 | Ariko Ethan | 5 | 5 | 249 | 348 |
-| Isooba Mbeiza Rachel | 3 | 6 | 349 | 250 |
 | Anthony Ssetimba | 3 | 3 | 414 | 0 |
-| Tola144 | 2 | 4 | 53 | 2 |
-| Haider0012831 | 2 | 2 | 43 | 2 |
+| Newtonhaider | 2 | 2 | 43 | 2 |
 | lomoro paul | 2 | 2 | 38 | 21 |
-| muganga-charles | 2 | 77 | 12996 | 0 |
-| CarolNaddunga | 1 | 5 | 51 | 41 |
+| CarolNaddunga | 7 | 5 | 51 | 41 |
+|Asingura-Philip | 6| 29 | 8627| 2668|
 
 ## 3) Detailed Contributions by Member (Files + Responsibilities)
 
 ### Shiramiki
-- Main areas: backend (89), frontend (32), docs (10).
-- Core responsibilities: recommendation engine evolution, dashboard analytics, search and mood UX flows, API robustness.
+- Main areas: backend (89), frontend (36), docs (12).
+- Core responsibilities: recommendation engine evolution, dashboard analytics, search and mood UX flows, API robustness, search-page and movie-page maintenance plus documentation cleanup, backend optimisation.
 - High-impact files changed:
   - backend/recommendations/views.py (14 touches)
   - backend/recommendations/tests.py (12)
@@ -66,9 +66,14 @@ xychart-beta
   - frontend/src/app/search/page.tsx (5)
   - backend/movies/services/discovery_service.py (5)
   - backend/movies/services/tmdb_service.py (5)
+  - README.md (2 touches)
+  - frontend/src/app/search/page.tsx
+  - frontend/src/app/movie/[id]/page.tsx
+  - frontend/src/lib/api.ts
+  - frontend/src/types/movie.ts
 
 ### a-kum2580
-- Main areas: backend (25), frontend (4), docs (3).
+- Main areas: backend (25), frontend (4), docs (3),  backend setup (3), repo governance (1).
 - Core responsibilities: backend reliability, user validation paths, serializer/API hardening, technical report updates.
 - High-impact files changed:
   - backend/users/serializers.py (4 touches)
@@ -78,20 +83,12 @@ xychart-beta
   - backend/movies/test_serializers.py (2)
   - backend/cinequest/settings.py (2)
   - BACKEND_TECHNICAL_REPORT.md (2)
-
-### muganga-charles
-- Main areas: backend (41), frontend (34), docs (1), other (1).
-- Core responsibilities: baseline codebase initialization and broad project scaffolding.
-- Representative files changed:
+- Files changed:
+  - backend/cinequest/asgi.py
   - backend/cinequest/settings.py
-  - backend/movies/models.py
-  - backend/movies/views.py
-  - backend/recommendations/views.py
-  - backend/users/models.py
-  - frontend/src/app/page.tsx
-  - frontend/src/app/dashboard/page.tsx
-  - frontend/src/app/search/page.tsx
-  - frontend/src/components/Navbar.tsx
+  - backend/cinequest/urls.py
+  - .github/CODEOWNERS
+
 
 ### Charis-Opol
 - Main areas: frontend (16).
@@ -119,15 +116,7 @@ xychart-beta
   - frontend/src/app/movie/[id]/page.tsx
   - frontend/src/app/search/page.tsx
 
-### Isooba Mbeiza Rachel
-- Main areas: frontend (4), docs (2).
-- Core responsibilities: search-page and movie-page maintenance plus documentation cleanup.
-- High-impact files changed:
-  - README.md (2 touches)
-  - frontend/src/app/search/page.tsx
-  - frontend/src/app/movie/[id]/page.tsx
-  - frontend/src/lib/api.ts
-  - frontend/src/types/movie.ts
+
 
 ### Anthony Ssetimba
 - Main areas: backend testing (3).
@@ -146,14 +135,6 @@ xychart-beta
   - backend/cinequest/settings.py
   - backend/.env.example
   - README.md
-
-### Tola144
-- Main areas: backend setup (3), repo governance (1).
-- Files changed:
-  - backend/cinequest/asgi.py
-  - backend/cinequest/settings.py
-  - backend/cinequest/urls.py
-  - .github/CODEOWNERS
 
 ### Haider0012831
 - Main areas: frontend testing/build config (2).
@@ -190,26 +171,5 @@ xychart-beta
 
 No direct test-file edits were found for some members; their contributions were primarily implementation/refactor/configuration work.
 
-## 5) Area Distribution by Member (files touched)
 
-| Member | Backend | Frontend | Docs | Other |
-|---|---:|---:|---:|---:|
-| Shiramiki | 89 | 32 | 10 | 0 |
-| muganga-charles | 41 | 34 | 1 | 1 |
-| a-kum2580 | 25 | 4 | 3 | 0 |
-| Charis-Opol | 0 | 16 | 0 | 0 |
-| Emma k | 8 | 0 | 0 | 0 |
-| Isooba Mbeiza Rachel | 0 | 4 | 2 | 0 |
-| CarolNaddunga | 4 | 0 | 1 | 0 |
-| Ariko Ethan | 0 | 5 | 0 | 0 |
-| Tola144 | 3 | 0 | 0 | 1 |
-| Anthony Ssetimba | 3 | 0 | 0 | 0 |
-| lomoro paul | 0 | 2 | 0 | 0 |
-| Haider0012831 | 0 | 2 | 0 | 0 |
 
-## 6) Current Branch Note (Isooba_M_Rachel vs main)
-
-For commits ahead of main in the current branch, the recorded author is:
-- Shiramiki
-
-This means the active branch work currently reflects a single contributor identity on top of main.
