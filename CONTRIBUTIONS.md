@@ -42,7 +42,7 @@ xychart-beta
 |---|---:|---:|---:|---:|
 | Shiramiki | 43 | 52 | 4496 | 1478 |
 | a-kum2580 | 30 | 25 | 1155 | 682 |
-| Charis-Opol | 23 | 23 | 8855 | 3394 |
+| Charis-Opol | 23 | 30 | 8855 | 3394 |
 | Emma k | 8 | 8 | 32 | 46 |
 | Ariko Ethan | 5 | 5 | 249 | 348 |
 | Anthony Ssetimba | 3 | 3 | 414 | 0 |
