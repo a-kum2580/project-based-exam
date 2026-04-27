@@ -98,6 +98,16 @@ xychart-beta
   - frontend/src/app/compare/page.tsx (4)
   - frontend/src/components/PersonalizedSection.tsx (3)
   - frontend/src/components/HeroSection.tsx (3)
+  - frontend\FIXES_SUMMARY.md
+  - frontend\Frontend_tests\AuthModal.test.tsx
+  - frontend\Frontend_tests\ComparePage.test.tsx
+  - frontend\Frontend_tests\HeroSection.test.tsx
+  - frontend\Frontend_tests\HomePage.test.tsx
+  - frontend\Frontend_tests\MovieCard.test.tsx
+  - frontend\Frontend_tests\MovieCarousel.test.tsx
+  - frontend\Frontend_tests\Navbar.test.tsx
+  - frontend\Frontend_tests\SearchModal.test.tsx
+  - frontend\Frontend_tests\test.md
 
 ### Emma k
 - Main areas: backend (8).
